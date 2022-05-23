@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pause
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: pause-deployment
+  template:
+    metadata:
+      labels:
+        app: pause-deployment
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                - key: xkf.xenit.io/node-ttl
+                  operator: Exists
+      containers:
+        - name: pause
+          image: k8s.gcr.io/pause:3.1
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pause
+spec:
+  template:
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                - key: xkf.xenit.io/node-ttl
+                  operator: Exists
+      containers:
+        - name: pause
+          image: k8s.gcr.io/pause:3.1
+      restartPolicy: Never
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: pause
+spec:
+  serviceName: "pause-statefulset"
+  selector:
+    matchLabels:
+      app: pause-statefulset
+  replicas: 3 
+  template:
+    metadata:
+      labels:
+        app: pause-statefulset
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                - key: xkf.xenit.io/node-ttl
+                  operator: Exists
+      containers:
+        - name: pause
+          image: k8s.gcr.io/pause:3.1

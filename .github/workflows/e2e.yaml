@@ -1,0 +1,24 @@
+name: e2e
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  kind:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Setup Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.16.x
+      - name: Setup Kubernetes
+        uses: engineerd/setup-kind@v0.5.0
+        with:
+          version: v0.14.0
+      - name: Run e2e tests
+        run: make e2e
