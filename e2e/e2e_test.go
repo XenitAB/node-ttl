@@ -35,7 +35,8 @@ func TestBasic(t *testing.T) {
 		return nodes[j].CreationTimestamp.After(nodes[i].CreationTimestamp.Time)
 	})
 	for _, node := range nodeList.Items {
-		for {
+		fmt.Println("checking node", node.Name)
+    for {
 			// Wait for node to become tainted
 			getNode, err := client.CoreV1().Nodes().Get(ctx, node.Name, metav1.GetOptions{})
 			require.NoError(t, err)
