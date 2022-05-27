@@ -22,8 +22,8 @@ When the node is fully cordoned and drained no new Pods will be scheduled to tha
 Easiest method to install Node TTL is with the [Helm Chart](./charts/node-ttl). Out of the box it requires no configuration, although there are setting that can be tuned.
 
 ```shell
-helm repo add https://xenitab.github.io/node-ttl/
-helm install node-ttl
+kubectl create namespace node-ttl
+helm upgrade --install --version v0.0.1 node-ttl oci://ghcr.io/xenitab/helm-charts/node-ttl
 ```
 
 ## Usage
