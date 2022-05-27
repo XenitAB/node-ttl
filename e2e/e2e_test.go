@@ -12,8 +12,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
-
-	"github.com/xenitab/node-ttl/internal/ttl"
 )
 
 func TestBasic(t *testing.T) {
@@ -27,7 +25,7 @@ func TestBasic(t *testing.T) {
 
 	allNodeList, err := client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	require.NoError(t, err)
-	nodeList, err := client.CoreV1().Nodes().List(ctx, metav1.ListOptions{LabelSelector: ttl.NodeTtlLabelKey})
+	nodeList, err := client.CoreV1().Nodes().List(ctx, metav1.ListOptions{LabelSelector: "xkf.xenit.io/node-ttl"})
 	require.NoError(t, err)
 
 	nodes := nodeList.Items

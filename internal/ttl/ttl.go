@@ -114,6 +114,6 @@ func evictNextExpiredNode(ctx context.Context, client kubernetes.Interface) erro
 	if err != nil {
 		return err
 	}
-  log.Println("eviction completed")
+	log.Println("eviction completed")
 	return nil
 }

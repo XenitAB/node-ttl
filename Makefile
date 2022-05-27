@@ -25,7 +25,9 @@ e2e: docker-build
 	export E2E_KUBECONFIG="$$TMP_DIR/.kube/config"
 	echo $$E2E_KUBECONFIG
 	kind create cluster --config ./e2e/config.yaml --kubeconfig $$E2E_KUBECONFIG
-	kubectl apply -f ./e2e/manifests.yaml
+	kubectl --kubeconfig $$E2E_KUBECONFIG apply -f ./e2e/manifests.yaml
 	kind load docker-image ${IMG}
 	helm upgrade --kubeconfig $$E2E_KUBECONFIG --install --create-namespace --namespace="node-ttl" node-ttl ./charts/node-ttl --set "image.pullPolicy=Never" --set "nodeTtl.interval=10s" --set "image.tag=${TAG}"
-	CGO_ENABLED=0 go test ./e2e -cover -v -timeout 300s
+	cd e2e	
+	CGO_ENABLED=0 go test e2e_test.go -cover -v -timeout 300s
+	kind delete cluster
