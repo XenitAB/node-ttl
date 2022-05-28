@@ -12,6 +12,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/alexflint/go-arg"
+	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
 	"go.uber.org/zap"
 	"k8s.io/client-go/kubernetes"
@@ -45,6 +46,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	g, ctx := errgroup.WithContext(ctx)
+	ctx = logr.NewContext(ctx, log)
 
 	g.Go(func() error {
 		err := ttl.Run(ctx, client, cfg.Interval)

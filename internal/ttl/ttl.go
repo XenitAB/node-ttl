@@ -22,6 +22,8 @@ const (
 // ttlEvictionCandidate returns the most appropriate node to be evicted.
 // If the a node with expired TTL is being in progress of being evicted it will be returned.
 func ttlEvictionCandidate(ctx context.Context, client kubernetes.Interface) (*corev1.Node, bool, error) {
+	log := logr.FromContextOrDiscard(ctx)
+
 	opts := metav1.ListOptions{LabelSelector: NodeTtlLabelKey}
 	nodeList, err := client.CoreV1().Nodes().List(ctx, opts)
 	if err != nil {
@@ -32,17 +34,22 @@ func ttlEvictionCandidate(ctx context.Context, client kubernetes.Interface) (*co
 	nodes := []corev1.Node{}
 	//nolint:gocritic // ignore
 	for _, node := range nodeList.Items {
+		log := log.WithValues("node", node.Name)
+
 		nullTime := time.Time{}
 		if node.CreationTimestamp.Time == nullTime {
+			log.Info("skipping node without creation timestamp")
 			continue
 		}
 		ttlValue, ok := node.ObjectMeta.Labels[NodeTtlLabelKey]
 		if !ok {
-			return nil, false, fmt.Errorf("expected ttl label in node: %s", node.Name)
+			log.Error(fmt.Errorf("key not found in map"), "ttl label not found")
+			continue
 		}
 		ttlDuration, err := time.ParseDuration(ttlValue)
 		if err != nil {
-			return nil, false, fmt.Errorf("could not parse ttl duration: %s", ttlValue)
+			log.Error(err, "could not parse ttl value", "ttlValue", ttlValue)
+			continue
 		}
 		diff := time.Since(node.CreationTimestamp.Time)
 		if diff < ttlDuration {
