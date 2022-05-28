@@ -51,7 +51,6 @@ func main() {
 	g.Go(func() error {
 		err := ttl.Run(ctx, client, cfg.Interval)
 		if err != nil {
-			fmt.Println(err)
 			return err
 		}
 		return nil
