@@ -8,6 +8,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/avast/retry-go"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -87,11 +88,19 @@ func evictNode(ctx context.Context, client kubernetes.Interface, node *corev1.No
 			log.Println("evicting pod", pod.Name)
 		},
 	}
-	err := drain.RunCordonOrUncordon(helper, node, true)
-	if err != nil {
-		return err
-	}
-	err = drain.RunNodeDrain(helper, node.Name)
+
+	// Retry to avoid large delays when API server hickups occur.
+	err := retry.Do(func() error {
+		err := drain.RunCordonOrUncordon(helper, node, true)
+		if err != nil {
+			return err
+		}
+		err = drain.RunNodeDrain(helper, node.Name)
+		if err != nil {
+			return err
+		}
+		return nil
+	}, retry.Attempts(5), retry.Delay(1*time.Second))
 	if err != nil {
 		return err
 	}
