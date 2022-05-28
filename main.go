@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -13,6 +12,8 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/alexflint/go-arg"
+	"github.com/go-logr/zapr"
+	"go.uber.org/zap"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -21,13 +22,21 @@ import (
 )
 
 func main() {
+	zapLog, err := zap.NewProduction()
+	if err != nil {
+		panic(fmt.Sprintf("who watches the watchmen (%v)?", err))
+	}
+	log := zapr.NewLogger(zapLog)
+
 	cfg, err := loadConfig(os.Args[1:])
 	if err != nil {
-		log.Panicf("could not load config: %v", err)
+		log.Error(err, "could not load config")
+		os.Exit(1)
 	}
 	client, err := getKubernetesClients(cfg.KubeConfigPath)
 	if err != nil {
-		log.Panicf("could not create Kubernetes client: %v", err)
+		log.Error(err, "could not create Kubernetes client", "path", cfg.KubeConfigPath)
+		os.Exit(1)
 	}
 
 	stopCh := make(chan os.Signal, 1)
@@ -53,7 +62,7 @@ func main() {
 	server := http.Server{Addr: ":8080", Handler: handler}
 	g.Go(server.ListenAndServe)
 
-	log.Println("running")
+	log.Info("running")
 	select {
 	case <-stopCh:
 		break
@@ -61,18 +70,18 @@ func main() {
 		break
 	}
 	cancel()
-	log.Println("shutting down")
+	log.Info("shutting down")
 
 	timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer timeoutCancel()
 	if err := server.Shutdown(timeoutCtx); err != nil {
-		log.Printf("error when shutting down server: %v", err)
+		log.Error(err, "error when shutting down HTTP server")
 	}
 
 	if err := g.Wait(); err != nil {
-		log.Panicf("shutdown error: %v", err)
+		log.Error(err, "shutdown error")
 	}
-	log.Println("gracefully shutdown")
+	log.Info("gracefully shutdown")
 }
 
 type config struct {

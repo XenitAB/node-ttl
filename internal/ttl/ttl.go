@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"sort"
 	"time"
 
 	"github.com/avast/retry-go"
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -75,6 +75,7 @@ func ttlEvictionCandidate(ctx context.Context, client kubernetes.Interface) (*co
 
 // evictNode cordons and drains the specified node.
 func evictNode(ctx context.Context, client kubernetes.Interface, node *corev1.Node) error {
+	log := logr.FromContextOrDiscard(ctx)
 	helper := &drain.Helper{
 		Ctx:                 ctx,
 		Client:              client,
@@ -85,7 +86,7 @@ func evictNode(ctx context.Context, client kubernetes.Interface, node *corev1.No
 		ErrOut:              io.Discard,
 		Out:                 io.Discard,
 		OnPodDeletedOrEvicted: func(pod *corev1.Pod, usingEviction bool) {
-			log.Println("evicting pod", pod.Name)
+			log.Info("completed eviction", "pod", pod.Name)
 		},
 	}
 
@@ -109,21 +110,21 @@ func evictNode(ctx context.Context, client kubernetes.Interface, node *corev1.No
 
 // evictNextExpiredNode will attempt to evict the next expired node if one exists.
 func evictNextExpiredNode(ctx context.Context, client kubernetes.Interface) error {
-	log.Println("checking for node with expired ttl")
+	log := logr.FromContextOrDiscard(ctx)
+	log.Info("checking for node with expired ttl")
 	node, ok, err := ttlEvictionCandidate(ctx, client)
 	if err != nil {
 		return err
 	}
 	if !ok {
-		log.Println("no node with expired ttl found")
+		log.Info("no node with expired ttl found")
 		return nil
 	}
-
-	log.Println("evicting node with expired ttl", node.Name)
+	log.Info("evicting node with expired ttl", "node", node.Name)
 	err = evictNode(ctx, client, node)
 	if err != nil {
 		return err
 	}
-	log.Println("eviction completed")
+	log.Info("eviction complete", "node", node.Name)
 	return nil
 }
