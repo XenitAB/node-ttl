@@ -136,8 +136,9 @@ func TestInvalidTtlLabelValue(t *testing.T) {
 	}
 	_, err := client.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{})
 	require.NoError(t, err)
-	_, _, err = ttlEvictionCandidate(ctx, client)
-	require.EqualError(t, err, "could not parse ttl duration: foobar")
+	_, ok, err := ttlEvictionCandidate(ctx, client)
+	require.Nil(t, err)
+	require.False(t, ok)
 }
 
 func TestMissingCreationTimestamp(t *testing.T) {
