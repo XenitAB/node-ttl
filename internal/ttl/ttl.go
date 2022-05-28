@@ -59,6 +59,7 @@ func ttlEvictionCandidate(ctx context.Context, client kubernetes.Interface) (*co
 	})
 
 	// Return first node if any that is currently being evicted
+	//nolint:gocritic // ignore
 	for _, node := range nodes {
 		// TODO: Should there be a more specific way to determine eviction in progress?
 		if !node.Spec.Unschedulable {
