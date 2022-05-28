@@ -11,7 +11,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
-func testNodeWithTtl(name string, creationOffest *time.Duration, ttl time.Duration) *corev1.Node {
+func testNodeWithTtl(name string, creationOffest *time.Duration, ttl time.Duration, evicting bool) *corev1.Node {
 	var creationTimestamp *metav1.Time
 	if creationOffest != nil {
 		creationTimestamp = &metav1.Time{Time: time.Now().Add(*creationOffest)}
@@ -24,6 +24,9 @@ func testNodeWithTtl(name string, creationOffest *time.Duration, ttl time.Durati
 			},
 			CreationTimestamp: *creationTimestamp,
 		},
+		Spec: corev1.NodeSpec{
+			Unschedulable: evicting,
+		},
 	}
 }
 
@@ -32,12 +35,13 @@ func TestExpiredTtl(t *testing.T) {
 		name           string
 		creationOffest time.Duration
 		ttl            time.Duration
+		evicting       bool
 	}
 
 	type test struct {
-		name      string
-		nodes     []testNode
-		nodeNames []string
+		name     string
+		nodes    []testNode
+		nodeName string
 	}
 
 	tests := []test{
@@ -50,7 +54,7 @@ func TestExpiredTtl(t *testing.T) {
 					ttl:            1 * time.Minute,
 				},
 			},
-			nodeNames: []string{"single"},
+			nodeName: "single",
 		},
 		{
 			name: "multiple nodes",
@@ -76,7 +80,29 @@ func TestExpiredTtl(t *testing.T) {
 					ttl:            1 * time.Minute,
 				},
 			},
-			nodeNames: []string{"third-expired", "fourth-expired", "first-expired"},
+			nodeName: "third-expired",
+		},
+		{
+			name: "eviction in progress",
+			nodes: []testNode{
+				{
+					name:           "first-expired",
+					creationOffest: (-10 * time.Minute),
+					ttl:            1 * time.Minute,
+				},
+				{
+					name:           "second-expired",
+					creationOffest: (-8 * time.Minute),
+					ttl:            1 * time.Minute,
+					evicting:       true,
+				},
+				{
+					name:           "third-expired",
+					creationOffest: (-9 * time.Minute),
+					ttl:            1 * time.Minute,
+				},
+			},
+			nodeName: "second-expired",
 		},
 	}
 	for _, tt := range tests {
@@ -84,16 +110,14 @@ func TestExpiredTtl(t *testing.T) {
 			ctx := context.TODO()
 			client := fake.NewSimpleClientset()
 			for _, n := range tt.nodes {
-				node := testNodeWithTtl(n.name, &n.creationOffest, n.ttl)
+				node := testNodeWithTtl(n.name, &n.creationOffest, n.ttl, n.evicting)
 				_, err := client.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{})
 				require.NoError(t, err)
 			}
-			nodes, err := ttlEvictionCandidates(ctx, client)
+			node, ok, err := ttlEvictionCandidate(ctx, client)
 			require.NoError(t, err)
-			require.Len(t, nodes, len(tt.nodeNames))
-			for i, nodeName := range tt.nodeNames {
-				require.Equal(t, nodeName, nodes[i].Name)
-			}
+			require.True(t, ok)
+			require.Equal(t, tt.nodeName, node.Name)
 		})
 	}
 }
@@ -112,7 +136,7 @@ func TestInvalidTtlLabelValue(t *testing.T) {
 	}
 	_, err := client.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{})
 	require.NoError(t, err)
-	_, err = ttlEvictionCandidates(ctx, client)
+	_, _, err = ttlEvictionCandidate(ctx, client)
 	require.EqualError(t, err, "could not parse ttl duration: foobar")
 }
 
@@ -129,7 +153,8 @@ func TestMissingCreationTimestamp(t *testing.T) {
 	}
 	_, err := client.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{})
 	require.NoError(t, err)
-	nodes, err := ttlEvictionCandidates(ctx, client)
+	node, ok, err := ttlEvictionCandidate(ctx, client)
 	require.NoError(t, err)
-	require.Empty(t, nodes)
+	require.False(t, ok)
+	require.Nil(t, node)
 }
