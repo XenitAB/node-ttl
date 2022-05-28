@@ -51,9 +51,7 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 	})
 	server := http.Server{Addr: ":8080", Handler: handler}
-	g.Go(func() error {
-		return server.ListenAndServe()
-	})
+	g.Go(server.ListenAndServe)
 
 	log.Println("running")
 	select {
@@ -67,7 +65,9 @@ func main() {
 
 	timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer timeoutCancel()
-	server.Shutdown(timeoutCtx)
+	if err := server.Shutdown(timeoutCtx); err != nil {
+		log.Printf("error when shutting down server: %v", err)
+	}
 
 	if err := g.Wait(); err != nil {
 		log.Panicf("shutdown error: %v", err)
