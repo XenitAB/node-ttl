@@ -2,11 +2,11 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
-	"syscall"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -28,22 +28,23 @@ func main() {
 		panic(fmt.Sprintf("who watches the watchmen (%v)?", err))
 	}
 	log := zapr.NewLogger(zapLog)
+	if err := run(log); err != nil {
+		log.Error(err, "runtime error")
+		os.Exit(1)
+	}
+}
 
+func run(log logr.Logger) error {
 	cfg, err := loadConfig(os.Args[1:])
 	if err != nil {
-		log.Error(err, "could not load config")
-		os.Exit(1)
+		return fmt.Errorf("could not load config: %w", err)
 	}
 	client, err := getKubernetesClients(cfg.KubeConfigPath)
 	if err != nil {
-		log.Error(err, "could not create Kubernetes client", "path", cfg.KubeConfigPath)
-		os.Exit(1)
+		return fmt.Errorf("could not create Kubernetes client: %w", err)
 	}
 
-	stopCh := make(chan os.Signal, 1)
-	signal.Notify(stopCh, syscall.SIGTERM, syscall.SIGINT)
-	defer signal.Stop(stopCh)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 	g, ctx := errgroup.WithContext(ctx)
 	ctx = logr.NewContext(ctx, log)
@@ -51,7 +52,6 @@ func main() {
 	g.Go(func() error {
 		err := ttl.Run(ctx, client, cfg.Interval)
 		if err != nil {
-			fmt.Println(err)
 			return err
 		}
 		return nil
@@ -61,29 +61,29 @@ func main() {
 	handler.HandleFunc("/readyz", func(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	server := http.Server{Addr: ":8080", Handler: handler}
-	g.Go(server.ListenAndServe)
+	srv := http.Server{Addr: ":8080", Handler: handler}
+	g.Go(func() error {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return err
+		}
+		return nil
+	})
+	g.Go(func() error {
+		<-ctx.Done()
+		if err := srv.Shutdown(context.Background()); err != nil {
+			return err
+		}
+		return nil
+	})
 
 	log.Info("running")
-	select {
-	case <-stopCh:
-		break
-	case <-ctx.Done():
-		break
-	}
-	cancel()
+	<-ctx.Done()
 	log.Info("shutting down")
-
-	timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer timeoutCancel()
-	if err := server.Shutdown(timeoutCtx); err != nil {
-		log.Error(err, "error when shutting down HTTP server")
-	}
-
 	if err := g.Wait(); err != nil {
-		log.Error(err, "shutdown error")
+		return fmt.Errorf("shutdown error: %w", err)
 	}
 	log.Info("gracefully shutdown")
+	return nil
 }
 
 type config struct {
