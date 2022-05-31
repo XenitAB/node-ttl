@@ -16,7 +16,8 @@ import (
 )
 
 const (
-	NodeTtlLabelKey = "xkf.xenit.io/node-ttl"
+	NodeTtlLabelKey      = "xkf.xenit.io/node-ttl"
+	ScaleDownDisabledKey = "cluster-autoscaler.kubernetes.io/scale-down-disabled"
 )
 
 // ttlEvictionCandidate returns the most appropriate node to be evicted.
@@ -39,6 +40,10 @@ func ttlEvictionCandidate(ctx context.Context, client kubernetes.Interface) (*co
 		nullTime := time.Time{}
 		if node.CreationTimestamp.Time == nullTime {
 			log.Info("skipping node without creation timestamp")
+			continue
+		}
+		if value, ok := node.ObjectMeta.Annotations[ScaleDownDisabledKey]; ok && value == "true" {
+			log.Info("skipping node with disabled scale down")
 			continue
 		}
 		ttlValue, ok := node.ObjectMeta.Labels[NodeTtlLabelKey]
