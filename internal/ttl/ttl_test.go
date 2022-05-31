@@ -122,6 +122,28 @@ func TestExpiredTtl(t *testing.T) {
 	}
 }
 
+func TestScaleDownDisabled(t *testing.T) {
+	ctx := context.TODO()
+	client := fake.NewSimpleClientset()
+	node := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "scale-down-disabled",
+			Labels: map[string]string{
+				NodeTtlLabelKey: "1m",
+			},
+			Annotations: map[string]string{
+				ScaleDownDisabledKey: "true",
+			},
+			CreationTimestamp: metav1.Time{Time: time.Now().Add(-5 * time.Minute)},
+		},
+	}
+	_, err := client.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{})
+	require.NoError(t, err)
+	_, ok, err := ttlEvictionCandidate(ctx, client)
+	require.Nil(t, err)
+	require.False(t, ok)
+}
+
 func TestInvalidTtlLabelValue(t *testing.T) {
 	ctx := context.TODO()
 	client := fake.NewSimpleClientset()

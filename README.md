@@ -41,6 +41,21 @@ metadata:
 
 The following node will be considered for eviction after it has existed for more the 24 hours.
 
+### Scale Down Disabled
+
+The cluster autoscaler annotation to [disable scale down](https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md#how-can-i-prevent-cluster-autoscaler-from-scaling-down-a-particular-node) is also respected by Node TTL. A node with the annotation will not be considered for eviction due to TTL.
+
+```yaml
+apiVersion: v1
+kind: Node
+metadata:
+  name: kind-worker
+  labels:
+    xkf.xenit.io/node-ttl: 24h
+  annotation:
+    cluster-autoscaler.kubernetes.io/scale-down-disabled: true
+```
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
