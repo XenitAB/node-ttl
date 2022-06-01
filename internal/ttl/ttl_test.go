@@ -123,8 +123,6 @@ func TestExpiredTtl(t *testing.T) {
 }
 
 func TestScaleDownDisabled(t *testing.T) {
-	ctx := context.TODO()
-	client := fake.NewSimpleClientset()
 	node := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "scale-down-disabled",
@@ -137,6 +135,9 @@ func TestScaleDownDisabled(t *testing.T) {
 			CreationTimestamp: metav1.Time{Time: time.Now().Add(-5 * time.Minute)},
 		},
 	}
+
+	ctx := context.TODO()
+	client := fake.NewSimpleClientset()
 	_, err := client.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{})
 	require.NoError(t, err)
 	_, ok, err := ttlEvictionCandidate(ctx, client)
@@ -145,8 +146,6 @@ func TestScaleDownDisabled(t *testing.T) {
 }
 
 func TestInvalidTtlLabelValue(t *testing.T) {
-	ctx := context.TODO()
-	client := fake.NewSimpleClientset()
 	node := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "invalid",
@@ -156,6 +155,9 @@ func TestInvalidTtlLabelValue(t *testing.T) {
 			CreationTimestamp: metav1.Time{Time: time.Now()},
 		},
 	}
+
+	ctx := context.TODO()
+	client := fake.NewSimpleClientset()
 	_, err := client.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{})
 	require.NoError(t, err)
 	_, ok, err := ttlEvictionCandidate(ctx, client)
@@ -164,8 +166,6 @@ func TestInvalidTtlLabelValue(t *testing.T) {
 }
 
 func TestMissingCreationTimestamp(t *testing.T) {
-	ctx := context.TODO()
-	client := fake.NewSimpleClientset()
 	node := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "missing-timestamp",
@@ -174,10 +174,57 @@ func TestMissingCreationTimestamp(t *testing.T) {
 			},
 		},
 	}
+
+	ctx := context.TODO()
+	client := fake.NewSimpleClientset()
 	_, err := client.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{})
 	require.NoError(t, err)
 	node, ok, err := ttlEvictionCandidate(ctx, client)
 	require.NoError(t, err)
 	require.False(t, ok)
 	require.Nil(t, node)
+}
+
+func TestNodeContainsNotSafeToEvict(t *testing.T) {
+	nodeName := ""
+	pods := []corev1.Pod{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "first",
+			},
+			Spec: corev1.PodSpec{
+				NodeName: nodeName,
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "two",
+				Annotations: map[string]string{
+					PodSafeToEvictKey: "false",
+				},
+			},
+			Spec: corev1.PodSpec{
+				NodeName: nodeName,
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "three",
+			},
+			Spec: corev1.PodSpec{
+				NodeName: nodeName,
+			},
+		},
+	}
+
+	ctx := context.TODO()
+	client := fake.NewSimpleClientset()
+	for _, pod := range pods {
+		_, err := client.CoreV1().Pods("").Create(ctx, &pod, metav1.CreateOptions{})
+		require.NoError(t, err)
+	}
+
+	result, err := nodeContainsNotSafeToEvictPods(ctx, client, nodeName)
+	require.NoError(t, err)
+	require.True(t, result)
 }

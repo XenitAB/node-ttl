@@ -18,7 +18,22 @@ import (
 const (
 	NodeTtlLabelKey      = "xkf.xenit.io/node-ttl"
 	ScaleDownDisabledKey = "cluster-autoscaler.kubernetes.io/scale-down-disabled"
+	PodSafeToEvictKey    = "cluster-autoscaler.kubernetes.io/safe-to-evict"
 )
+
+func nodeContainsNotSafeToEvictPods(ctx context.Context, client kubernetes.Interface, nodeName string) (bool, error) {
+	opts := metav1.ListOptions{FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeName)}
+	podList, err := client.CoreV1().Pods("").List(ctx, opts)
+	if err != nil {
+		return false, err
+	}
+	for _, pod := range podList.Items {
+		if value, ok := pod.ObjectMeta.Annotations[PodSafeToEvictKey]; ok && value == "false" {
+			return true, nil
+		}
+	}
+	return false, nil
+}
 
 // ttlEvictionCandidate returns the most appropriate node to be evicted.
 // If the a node with expired TTL is being in progress of being evicted it will be returned.
@@ -42,10 +57,6 @@ func ttlEvictionCandidate(ctx context.Context, client kubernetes.Interface) (*co
 			log.Info("skipping node without creation timestamp")
 			continue
 		}
-		if value, ok := node.ObjectMeta.Annotations[ScaleDownDisabledKey]; ok && value == "true" {
-			log.Info("skipping node with disabled scale down")
-			continue
-		}
 		ttlValue, ok := node.ObjectMeta.Labels[NodeTtlLabelKey]
 		if !ok {
 			log.Error(fmt.Errorf("key not found in map"), "ttl label not found")
@@ -58,6 +69,18 @@ func ttlEvictionCandidate(ctx context.Context, client kubernetes.Interface) (*co
 		}
 		diff := time.Since(node.CreationTimestamp.Time)
 		if diff < ttlDuration {
+			continue
+		}
+		if value, ok := node.ObjectMeta.Annotations[ScaleDownDisabledKey]; ok && value == "true" {
+			log.Info("skipping node with scale down disabled")
+			continue
+		}
+		containsNotSafeToEvict, err := nodeContainsNotSafeToEvictPods(ctx, client, node.Name)
+		if err != nil {
+			return nil, false, err
+		}
+		if containsNotSafeToEvict {
+			log.Info("skipping node containing pod marked not safe to evict")
 			continue
 		}
 		nodes = append(nodes, node)
