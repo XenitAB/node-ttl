@@ -23,7 +23,7 @@ Easiest method to install Node TTL is with the [Helm Chart](./charts/node-ttl). 
 
 ```shell
 kubectl create namespace node-ttl
-helm upgrade --install --version v0.0.1 node-ttl oci://ghcr.io/xenitab/helm-charts/node-ttl
+helm upgrade --install --version <version> node-ttl oci://ghcr.io/xenitab/helm-charts/node-ttl
 ```
 
 ## Usage
@@ -54,6 +54,19 @@ metadata:
     xkf.xenit.io/node-ttl: 24h
   annotation:
     cluster-autoscaler.kubernetes.io/scale-down-disabled: true
+```
+
+### Safe To Evict
+
+A Node with a Pod annotated that it is [not safe to evict](https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md#what-types-of-pods-can-prevent-ca-from-removing-a-node) will not be considered for eviction due to TTL. This is useful in situations where long running Jobs need to run much longer than the TTL set on any Node. This way the Node will be kept running until the Job completes and then it can be evicted. Be careful using this feature as setting this annotation on all Pods will stop any TTL evictions.
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: no-evict
+  annotations:
+    cluster-autoscaler.kubernetes.io/safe-to-evict: false
 ```
 
 ## License
