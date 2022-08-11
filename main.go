@@ -15,6 +15,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
 	"go.uber.org/zap"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -22,23 +23,33 @@ import (
 	"github.com/xenitab/node-ttl/internal/ttl"
 )
 
+//nolint:lll //ignore
+type config struct {
+	KubeConfigPath           string        `arg:"--kubeconfig" help:"path to the kubeconfig file"`
+	Interval                 time.Duration `arg:"--interval" default:"10m" help:"interval at which to evaluate node ttl"`
+	NodePoolMinCheck         bool          `arg:"--min-check" default:"true" help:"check if node pool min size will not allow scale down"`
+	StatusConfigMapName      string        `arg:"--status-config-map-name" default:"cluster-autoscaler-status" help:"Cluster autoscaler status configmap name"`
+	StatusConfigMapNamespace string        `arg:"--status-config-map-namespace" default:"cluster-autoscaler" help:"Cluster autoscaler status configmap namespace"`
+}
+
 func main() {
+	var cfg config
+	arg.MustParse(&cfg)
+
 	zapLog, err := zap.NewProduction()
 	if err != nil {
-		panic(fmt.Sprintf("who watches the watchmen (%v)?", err))
+		fmt.Printf("who watches the watchmen (%v)?\n", err)
+		os.Exit(1)
 	}
 	log := zapr.NewLogger(zapLog)
-	if err := run(log); err != nil {
+
+	if err := run(log, cfg); err != nil {
 		log.Error(err, "runtime error")
 		os.Exit(1)
 	}
 }
 
-func run(log logr.Logger) error {
-	cfg, err := loadConfig(os.Args[1:])
-	if err != nil {
-		return fmt.Errorf("could not load config: %w", err)
-	}
+func run(log logr.Logger, cfg config) error {
 	client, err := getKubernetesClients(cfg.KubeConfigPath)
 	if err != nil {
 		return fmt.Errorf("could not create Kubernetes client: %w", err)
@@ -50,7 +61,11 @@ func run(log logr.Logger) error {
 	ctx = logr.NewContext(ctx, log)
 
 	g.Go(func() error {
-		err := ttl.Run(ctx, client, cfg.Interval)
+		var nn *types.NamespacedName
+		if cfg.NodePoolMinCheck {
+			nn = &types.NamespacedName{Namespace: cfg.StatusConfigMapNamespace, Name: cfg.StatusConfigMapName}
+		}
+		err := ttl.Run(ctx, client, cfg.Interval, nn)
 		if err != nil {
 			return err
 		}
@@ -61,7 +76,7 @@ func run(log logr.Logger) error {
 	handler.HandleFunc("/readyz", func(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	srv := http.Server{Addr: ":8080", Handler: handler}
+	srv := http.Server{Addr: ":8080", ReadHeaderTimeout: 10 * time.Second, Handler: handler}
 	g.Go(func() error {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return err
@@ -77,35 +92,11 @@ func run(log logr.Logger) error {
 	})
 
 	log.Info("running")
-	<-ctx.Done()
-	log.Info("shutting down")
 	if err := g.Wait(); err != nil {
 		return fmt.Errorf("shutdown error: %w", err)
 	}
 	log.Info("gracefully shutdown")
 	return nil
-}
-
-type config struct {
-	KubeConfigPath string        `arg:"--kubeconfig" help:"path to the kubeconfig file"`
-	Interval       time.Duration `arg:"--interval" default:"10m" help:"interval at which to evaluate node ttl"`
-}
-
-func loadConfig(args []string) (config, error) {
-	argCfg := arg.Config{
-		Program:   "node-ttl",
-		IgnoreEnv: true,
-	}
-	var cfg config
-	parser, err := arg.NewParser(argCfg, &cfg)
-	if err != nil {
-		return config{}, err
-	}
-	err = parser.Parse(args)
-	if err != nil {
-		return config{}, err
-	}
-	return cfg, nil
 }
 
 func getKubernetesClients(path string) (kubernetes.Interface, error) {

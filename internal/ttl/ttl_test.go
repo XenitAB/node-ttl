@@ -114,7 +114,7 @@ func TestExpiredTtl(t *testing.T) {
 				_, err := client.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{})
 				require.NoError(t, err)
 			}
-			node, ok, err := ttlEvictionCandidate(ctx, client)
+			node, ok, err := ttlEvictionCandidate(ctx, client, nil)
 			require.NoError(t, err)
 			require.True(t, ok)
 			require.Equal(t, tt.nodeName, node.Name)
@@ -140,7 +140,7 @@ func TestScaleDownDisabled(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	_, err := client.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{})
 	require.NoError(t, err)
-	_, ok, err := ttlEvictionCandidate(ctx, client)
+	_, ok, err := ttlEvictionCandidate(ctx, client, nil)
 	require.Nil(t, err)
 	require.False(t, ok)
 }
@@ -160,7 +160,7 @@ func TestInvalidTtlLabelValue(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	_, err := client.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{})
 	require.NoError(t, err)
-	_, ok, err := ttlEvictionCandidate(ctx, client)
+	_, ok, err := ttlEvictionCandidate(ctx, client, nil)
 	require.Nil(t, err)
 	require.False(t, ok)
 }
@@ -179,7 +179,7 @@ func TestMissingCreationTimestamp(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	_, err := client.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{})
 	require.NoError(t, err)
-	node, ok, err := ttlEvictionCandidate(ctx, client)
+	node, ok, err := ttlEvictionCandidate(ctx, client, nil)
 	require.NoError(t, err)
 	require.False(t, ok)
 	require.Nil(t, node)
@@ -219,8 +219,8 @@ func TestNodeContainsNotSafeToEvict(t *testing.T) {
 
 	ctx := context.TODO()
 	client := fake.NewSimpleClientset()
-	for _, pod := range pods {
-		_, err := client.CoreV1().Pods("").Create(ctx, &pod, metav1.CreateOptions{})
+	for i := range pods {
+		_, err := client.CoreV1().Pods("").Create(ctx, &pods[i], metav1.CreateOptions{})
 		require.NoError(t, err)
 	}
 
