@@ -69,6 +69,12 @@ metadata:
     cluster-autoscaler.kubernetes.io/safe-to-evict: false
 ```
 
+### Cluster Autoscaler Status
+
+A node pool where the min count is equal to the current node count will node be scaled down by cluster autoscaler. Even if the node is completely unused and a scale down candidate. This is because the cluster austoscaler has to fulfill the minum count requirement. This is an issue for Node TTL as it relies on cluster autoscaler node removal to replace nodes. If a node in this case were to be cordoned and drained the node would get stuck forever without any Pods scheduled to it. In a perfect world cluster autoscaler would allow the node removal and create a new node or alternativly preemptivly add a new node to the node pool.
+
+To mitigate this issue Node TTL will check that the node pool has capcity to scale down, by reading the status in the [cluster autoscalers status Config Map](https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md#what-events-are-emitted-by-ca). If the node pool min count is equal to the current node count the node will not be considered a candidate for eviction.
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

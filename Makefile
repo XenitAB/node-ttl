@@ -45,17 +45,20 @@ e2e: docker-build docker-build-cluster-autoscaler
 	# Start cluster autoscaler
 	kubectl --kubeconfig $$KIND_KUBECONFIG apply -f ./e2e/cluster-autoscaler.yaml
 	
+	# Start node ttl
+	helm upgrade --kubeconfig $$KIND_KUBECONFIG --install --create-namespace --namespace="node-ttl" node-ttl ./charts/node-ttl --set "image.pullPolicy=Never" --set "nodeTtl.interval=10s" --set "image.tag=${TAG}"
+
+	# Run capcity check tests
+	go test ./e2e/e2e_test.go -cover -v -timeout 300s -run TestCapcityCheck
+
 	# Start pause workloads
 	kubectl --kubeconfig $$KIND_KUBECONFIG apply -f ./e2e/pause-workloads.yaml
 	kubectl --kubeconfig $$KIND_KUBECONFIG --namespace default wait --timeout=300s --for=jsonpath="{.status.active}"=1 job/pause
 	kubectl --kubeconfig $$KIND_KUBECONFIG --namespace default wait --timeout=300s --for=jsonpath="{.status.availableReplicas}"=3 deployment/pause
 	kubectl --kubeconfig $$KIND_KUBECONFIG --namespace default wait --timeout=300s --for=jsonpath="{.status.availableReplicas}"=3 statefulset/pause
 
-	# Start node ttl
-	helm upgrade --kubeconfig $$KIND_KUBECONFIG --install --create-namespace --namespace="node-ttl" node-ttl ./charts/node-ttl --set "image.pullPolicy=Never" --set "nodeTtl.interval=10s" --set "image.tag=${TAG}"
-
-	# Run tests
-	go test ./e2e/e2e_test.go -cover -v -timeout 300s
+	# Run TTL eviction tests
+	go test ./e2e/e2e_test.go -cover -v -timeout 300s -run TestTTLEviction
 
 	# Delete cluster
 	kind delete cluster

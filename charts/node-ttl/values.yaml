@@ -31,4 +31,6 @@ tolerations: []
 affinity: {}
 
 nodeTtl:
-  interval: "10m"
+  interval: 10m
+  statusConfigMapName: cluster-autoscaler-status
+  statusConfigMapNamespace: cluster-autoscaler

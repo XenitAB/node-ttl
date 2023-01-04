@@ -4,10 +4,11 @@ import (
 	"context"
 	"time"
 
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 )
 
-func Run(ctx context.Context, client kubernetes.Interface, interval time.Duration) error {
+func Run(ctx context.Context, client kubernetes.Interface, interval time.Duration, clusterAutoscalerStatus *types.NamespacedName) error {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
@@ -15,7 +16,7 @@ func Run(ctx context.Context, client kubernetes.Interface, interval time.Duratio
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
-			err := evictNextExpiredNode(ctx, client)
+			err := evictNextExpiredNode(ctx, client, clusterAutoscalerStatus)
 			if err != nil {
 				return err
 			}

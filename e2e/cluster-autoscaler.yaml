@@ -315,7 +315,7 @@ spec:
           command:
             - ./cluster-autoscaler
             - --cloud-provider=kubemark
-            - --namespace=default
+            - --namespace=cluster-autoscaler
             - --nodes=1:10:asg1
             - --logtostderr=true
             - --scale-down-delay-after-add=10s

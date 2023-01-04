@@ -11,8 +11,11 @@ import (
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/kubectl/pkg/drain"
+
+	"github.com/xenitab/node-ttl/internal/status"
 )
 
 const (
@@ -21,13 +24,15 @@ const (
 	PodSafeToEvictKey    = "cluster-autoscaler.kubernetes.io/safe-to-evict"
 )
 
+// nodeContainsNotSafeToEvictPods checks if a node has any Pods which are not safe to evict.
 func nodeContainsNotSafeToEvictPods(ctx context.Context, client kubernetes.Interface, nodeName string) (bool, error) {
 	opts := metav1.ListOptions{FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeName)}
 	podList, err := client.CoreV1().Pods("").List(ctx, opts)
 	if err != nil {
 		return false, err
 	}
-	for _, pod := range podList.Items {
+	for i := range podList.Items {
+		pod := podList.Items[i]
 		if value, ok := pod.ObjectMeta.Annotations[PodSafeToEvictKey]; ok && value == "false" {
 			return true, nil
 		}
@@ -35,46 +40,84 @@ func nodeContainsNotSafeToEvictPods(ctx context.Context, client kubernetes.Inter
 	return false, nil
 }
 
+// nodeHasExpired returns true if node age is larger than ttl.
+func nodeHasExpired(node *corev1.Node) (bool, error) {
+	// Skip node which has not yet a creating timestamp
+	nullTime := time.Time{}
+	if node.CreationTimestamp.Time == nullTime {
+		return false, nil
+	}
+	ttlValue, ok := node.ObjectMeta.Labels[NodeTtlLabelKey]
+	if !ok {
+		return false, fmt.Errorf("could not find ttl label in node: %s", NodeTtlLabelKey)
+	}
+	ttlDuration, err := time.ParseDuration(ttlValue)
+	if err != nil {
+		return false, fmt.Errorf("could not parse ttl value: %s", ttlValue)
+	}
+	diff := time.Since(node.CreationTimestamp.Time)
+	if diff < ttlDuration {
+		return false, nil
+	}
+	return true, nil
+}
+
 // ttlEvictionCandidate returns the most appropriate node to be evicted.
 // If the a node with expired TTL is being in progress of being evicted it will be returned.
-func ttlEvictionCandidate(ctx context.Context, client kubernetes.Interface) (*corev1.Node, bool, error) {
+//
+//nolint:gocognit,cyclop //ignore
+func ttlEvictionCandidate(ctx context.Context, client kubernetes.Interface,
+	clusterAutoscalerStatus *types.NamespacedName) (*corev1.Node, bool, error) {
 	log := logr.FromContextOrDiscard(ctx)
 
-	opts := metav1.ListOptions{LabelSelector: NodeTtlLabelKey}
-	nodeList, err := client.CoreV1().Nodes().List(ctx, opts)
+	// Get nodes with expired TTL
+	nodeList, err := client.CoreV1().Nodes().List(ctx, metav1.ListOptions{LabelSelector: NodeTtlLabelKey})
 	if err != nil {
 		return nil, false, err
 	}
-
-	// Get nodes with expired TTL
 	nodes := []corev1.Node{}
-	//nolint:gocritic // ignore
-	for _, node := range nodeList.Items {
+	for i := range nodeList.Items {
+		node := nodeList.Items[i]
 		log := log.WithValues("node", node.Name)
 
-		nullTime := time.Time{}
-		if node.CreationTimestamp.Time == nullTime {
-			log.Info("skipping node without creation timestamp")
-			continue
-		}
-		ttlValue, ok := node.ObjectMeta.Labels[NodeTtlLabelKey]
-		if !ok {
-			log.Error(fmt.Errorf("key not found in map"), "ttl label not found")
-			continue
-		}
-		ttlDuration, err := time.ParseDuration(ttlValue)
-		if err != nil {
-			log.Error(err, "could not parse ttl value", "ttlValue", ttlValue)
-			continue
-		}
-		diff := time.Since(node.CreationTimestamp.Time)
-		if diff < ttlDuration {
-			continue
-		}
+		// Scale down disabled annotation
 		if value, ok := node.ObjectMeta.Annotations[ScaleDownDisabledKey]; ok && value == "true" {
 			log.Info("skipping node with scale down disabled")
 			continue
 		}
+
+		// Node has expired TTL
+		expired, err := nodeHasExpired(&node)
+		if err != nil {
+			log.Error(err, "skipping node that could not be determined if it is expired")
+			continue
+		}
+		if !expired {
+			continue
+		}
+
+		// Node pool has capacity to scale down
+		if clusterAutoscalerStatus != nil {
+			getOpts := metav1.GetOptions{}
+			caConfigMap, err := client.CoreV1().ConfigMaps(clusterAutoscalerStatus.Namespace).Get(ctx, clusterAutoscalerStatus.Name, getOpts)
+			if err != nil {
+				return nil, false, err
+			}
+			caStatus, ok := caConfigMap.Data["status"]
+			if !ok {
+				return nil, false, fmt.Errorf("could not find status in config map")
+			}
+			ok, err = status.HasScaleDownCapacity(caStatus, &node)
+			if err != nil {
+				return nil, false, err
+			}
+			if !ok {
+				log.Info("skipping because node pool does not have capacity for scale down")
+				continue
+			}
+		}
+
+		// Pods in Nodes can't be evicted
 		containsNotSafeToEvict, err := nodeContainsNotSafeToEvictPods(ctx, client, node.Name)
 		if err != nil {
 			return nil, false, err
@@ -83,16 +126,12 @@ func ttlEvictionCandidate(ctx context.Context, client kubernetes.Interface) (*co
 			log.Info("skipping node containing pod marked not safe to evict")
 			continue
 		}
+
 		nodes = append(nodes, node)
 	}
 	if len(nodes) == 0 {
 		return nil, false, nil
 	}
-
-	// Sort nodes oldest to newest
-	sort.SliceStable(nodes, func(i, j int) bool {
-		return nodes[j].CreationTimestamp.After(nodes[i].CreationTimestamp.Time)
-	})
 
 	// Return first node if any that is currently being evicted
 	//nolint:gocritic // ignore
@@ -103,8 +142,10 @@ func ttlEvictionCandidate(ctx context.Context, client kubernetes.Interface) (*co
 		}
 		return &node, true, nil
 	}
-
 	// Return oldest node as candidate
+	sort.SliceStable(nodes, func(i, j int) bool {
+		return nodes[j].CreationTimestamp.After(nodes[i].CreationTimestamp.Time)
+	})
 	return &nodes[0], true, nil
 }
 
@@ -144,10 +185,10 @@ func evictNode(ctx context.Context, client kubernetes.Interface, node *corev1.No
 }
 
 // evictNextExpiredNode will attempt to evict the next expired node if one exists.
-func evictNextExpiredNode(ctx context.Context, client kubernetes.Interface) error {
+func evictNextExpiredNode(ctx context.Context, client kubernetes.Interface, clusterAutoscalerStatus *types.NamespacedName) error {
 	log := logr.FromContextOrDiscard(ctx)
 	log.Info("checking for node with expired ttl")
-	node, ok, err := ttlEvictionCandidate(ctx, client)
+	node, ok, err := ttlEvictionCandidate(ctx, client, clusterAutoscalerStatus)
 	if err != nil {
 		return err
 	}
