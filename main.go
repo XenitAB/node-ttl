@@ -14,11 +14,9 @@ import (
 	"github.com/alexflint/go-arg"
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
+	"github.com/xenitab/pkg/kubernetes"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/xenitab/node-ttl/internal/ttl"
 )
@@ -50,9 +48,9 @@ func main() {
 }
 
 func run(log logr.Logger, cfg config) error {
-	client, err := getKubernetesClients(cfg.KubeConfigPath)
+	clientset, err := kubernetes.GetKubernetesClientset(cfg.KubeConfigPath)
 	if err != nil {
-		return fmt.Errorf("could not create Kubernetes client: %w", err)
+		return err
 	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
@@ -65,7 +63,7 @@ func run(log logr.Logger, cfg config) error {
 		if cfg.NodePoolMinCheck {
 			nn = &types.NamespacedName{Namespace: cfg.StatusConfigMapNamespace, Name: cfg.StatusConfigMapName}
 		}
-		err := ttl.Run(ctx, client, cfg.Interval, nn)
+		err := ttl.Run(ctx, clientset, cfg.Interval, nn)
 		if err != nil {
 			return err
 		}
@@ -97,31 +95,4 @@ func run(log logr.Logger, cfg config) error {
 	}
 	log.Info("gracefully shutdown")
 	return nil
-}
-
-func getKubernetesClients(path string) (kubernetes.Interface, error) {
-	cfg, err := getKubernetesConfig(path)
-	if err != nil {
-		return nil, err
-	}
-	client, err := kubernetes.NewForConfig(cfg)
-	if err != nil {
-		return nil, err
-	}
-	return client, nil
-}
-
-func getKubernetesConfig(path string) (*rest.Config, error) {
-	if path != "" {
-		cfg, err := clientcmd.BuildConfigFromFlags("", path)
-		if err != nil {
-			return nil, err
-		}
-		return cfg, nil
-	}
-	cfg, err := rest.InClusterConfig()
-	if err != nil {
-		return nil, err
-	}
-	return cfg, nil
 }
