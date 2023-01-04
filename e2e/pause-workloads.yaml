@@ -22,6 +22,13 @@ spec:
       containers:
         - name: pause
           image: k8s.gcr.io/pause:3.1
+          resources:
+            requests:
+              memory: 3000Mi
+      tolerations:
+        - key: "kubemark"
+          operator: "Exists"
+          effect: "NoSchedule"
 ---
 apiVersion: batch/v1
 kind: Job
@@ -30,6 +37,10 @@ metadata:
 spec:
   template:
     spec:
+      containers:
+        - name: pause
+          image: k8s.gcr.io/pause:3.1
+      restartPolicy: Never
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -37,10 +48,10 @@ spec:
               - matchExpressions:
                 - key: xkf.xenit.io/node-ttl
                   operator: Exists
-      containers:
-        - name: pause
-          image: k8s.gcr.io/pause:3.1
-      restartPolicy: Never
+      tolerations:
+        - key: "kubemark"
+          operator: "Exists"
+          effect: "NoSchedule"
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -57,6 +68,9 @@ spec:
       labels:
         app: pause-statefulset
     spec:
+      containers:
+        - name: pause
+          image: k8s.gcr.io/pause:3.1
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -64,6 +78,7 @@ spec:
               - matchExpressions:
                 - key: xkf.xenit.io/node-ttl
                   operator: Exists
-      containers:
-        - name: pause
-          image: k8s.gcr.io/pause:3.1
+      tolerations:
+        - key: "kubemark"
+          operator: "Exists"
+          effect: "NoSchedule"

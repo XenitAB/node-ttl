@@ -1,0 +1,107 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kubemark
+---
+apiVersion: v1
+kind: ReplicationController
+metadata:
+  name: hollow-node
+  namespace: kubemark
+  labels:
+    autoscaling.k8s.io/nodegroup: asg1
+spec:
+  replicas: 1
+  selector:
+      name: hollow-node
+  template:
+    metadata:
+      labels:
+        name: hollow-node
+        autoscaling.k8s.io/nodegroup: asg1
+    spec:
+      initContainers:
+      - name: init-inotify-limit
+        image: docker.io/busybox:latest
+        command: ['sysctl', '-w', 'fs.inotify.max_user_instances=200']
+        securityContext:
+          privileged: true
+      volumes:
+      - name: kubeconfig-volume
+        secret:
+          secretName: kubeconfig
+      - name: logs-volume
+        hostPath:
+          path: /var/log
+      - name: containerd
+        hostPath:
+          path: /run/containerd
+      containers:
+      - name: hollow-kubelet
+        image: quay.io/elmiko/kubemark:v1.25.3
+        ports:
+        - containerPort: 4194
+        - containerPort: 10250
+        - containerPort: 10255
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        command:
+        - /kubemark
+        args:
+        - --morph=kubelet
+        - --name=$(NODE_NAME)
+        - --kubeconfig=/kubeconfig/kubelet.kubeconfig
+        - --alsologtostderr
+        - --v=2
+        - --node-labels=xkf.xenit.io/node-ttl=30s,autoscaling.k8s.io/nodegroup=asg1
+        - --register-with-taints=kubemark:NoSchedule
+        volumeMounts:
+        - name: kubeconfig-volume
+          mountPath: /kubeconfig
+          readOnly: true
+        - name: logs-volume
+          mountPath: /var/log
+        - name: containerd
+          mountPath: /run/containerd
+        resources:
+          requests:
+            cpu: 20m
+            memory: 50M
+        securityContext:
+          privileged: true
+      - name: hollow-proxy
+        image: quay.io/elmiko/kubemark:v1.25.3
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        command:
+        - /kubemark
+        args:
+        - --morph=proxy
+        - --name=$(NODE_NAME)
+        - --use-real-proxier=false
+        - --kubeconfig=/kubeconfig/kubeproxy.kubeconfig
+        - --alsologtostderr
+        - --v=2
+        volumeMounts:
+        - name: kubeconfig-volume
+          mountPath: /kubeconfig
+          readOnly: true
+        - name: logs-volume
+          mountPath: /var/log
+        resources:
+          requests:
+            cpu: 20m
+            memory: 50M
+      tolerations:
+      - effect: NoExecute
+        key: node.kubernetes.io/unreachable
+        operator: Exists
+      - effect: NoExecute
+        key: node.kubernetes.io/not-ready
+        operator: Exists
