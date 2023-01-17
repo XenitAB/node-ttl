@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 )
@@ -15,15 +16,11 @@ const (
 )
 
 func HasScaleDownCapacity(status string, node *corev1.Node) (bool, error) {
-	nodePool, err := getNodePoolName(node)
+	nodePoolName, err := getNodePoolName(node)
 	if err != nil {
 		return false, err
 	}
-	health, err := getNodePoolHealth(status, nodePool)
-	if err != nil {
-		return false, err
-	}
-	ready, min, err := getReadyAndMinCount(health)
+	ready, min, err := getNodePoolReadyAndMinCount(status, nodePoolName)
 	if err != nil {
 		return false, err
 	}
@@ -33,35 +30,64 @@ func HasScaleDownCapacity(status string, node *corev1.Node) (bool, error) {
 	return true, nil
 }
 
+func getNodePoolLabelKeys() []string {
+	return []string{AzureNodePoolLabelKey, AWSNodePoolLabelKey, KubemarkNodePoolLabelKey}
+}
+
 func getNodePoolName(node *corev1.Node) (string, error) {
-	labelKeys := []string{AzureNodePoolLabelKey, AWSNodePoolLabelKey, KubemarkNodePoolLabelKey}
-	for _, key := range labelKeys {
-		nodePool, ok := node.ObjectMeta.Labels[key]
+	for _, key := range getNodePoolLabelKeys() {
+		nodePoolName, ok := node.ObjectMeta.Labels[key]
 		if !ok {
 			continue
 		}
-		return nodePool, nil
+
+		// Custom handling for different cloud provider is required because Cluster Autoscaler will use VMSS or ASG names for the pool name.
+		switch key {
+		case AzureNodePoolLabelKey:
+			// Azure agent pool label will only give the pool name used when creating it in AKS. The pool name used in the CA status is the name
+			// of the VMSS automatically created by AKS. The Node name will be the same as the VMSS name with a unique instance suffix. The label
+			// fetching is only done to check for an AKS cluster. The Node name with the suffix removed is instead used as the pool name.
+			nodePoolName = node.Name[:strings.LastIndex(node.Name, "-vmss")+5]
+		case AWSNodePoolLabelKey:
+			// AWS will use the generated ASG name for the pool name in the CA. This value cannot be found in the Node metadata. The name is however,
+			// predicatable as it will be the same as the EKS node pool name with an additonal UUID as a suffix. This is why the UUID regex has to be
+			// appended to the end.
+			nodePoolName = fmt.Sprintf("eks-%s-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", nodePoolName)
+		}
+		return nodePoolName, nil
 	}
 	return "", fmt.Errorf("could not find node pool label in node: %s", node.Name)
 }
 
-func getNodePoolHealth(status string, nodePool string) (string, error) {
-	reg := regexp.MustCompile(`\s*Name:\s*(.*)\n\s*Health:\s*(.*)`)
-	matches := reg.FindAllStringSubmatch(status, -1)
-	for _, match := range matches {
-		if len(match) != 3 {
-			return "", fmt.Errorf("expected match list to be of length 3: %d", len(match))
-		}
-		if match[1] != nodePool {
-			continue
-		}
-		return match[2], nil
+func getNodePoolReadyAndMinCount(status, nodePoolName string) (int, int, error) {
+	health, err := getNodePoolHealth(status, nodePoolName)
+	if err != nil {
+		return 0, 0, err
 	}
-	return "", fmt.Errorf("could not find status for node pool: %s", nodePool)
+	ready, min, err := getReadyAndMinCount(health)
+	if err != nil {
+		return 0, 0, err
+	}
+	return ready, min, nil
+}
+
+func getNodePoolHealth(status string, nodePoolName string) (string, error) {
+	reg, err := regexp.Compile(fmt.Sprintf(`\s*Name:\s*%s\n\s*Health:\s*(.*)`, nodePoolName))
+	if err != nil {
+		return "", err
+	}
+	matches := reg.FindStringSubmatch(status)
+	if len(matches) == 0 {
+		return "", fmt.Errorf("could not find status for node pool: %s", nodePoolName)
+	}
+	if len(matches) != 2 {
+		return "", fmt.Errorf("expected match list to be of lenght 2 not: %d", len(matches))
+	}
+	return matches[1], nil
 }
 
 func getReadyAndMinCount(health string) (int, int, error) {
-	reg := regexp.MustCompile(`Healthy \(ready=(\d).*minSize=(\d)`)
+	reg := regexp.MustCompile(`Healthy \(ready=(\d+).*minSize=(\d+)`)
 	matches := reg.FindStringSubmatch(health)
 	if len(matches) != 3 {
 		return 0, 0, fmt.Errorf("expected match list to be of length 3: %d", len(matches))
