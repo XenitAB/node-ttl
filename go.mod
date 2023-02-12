@@ -8,12 +8,12 @@ require (
 	github.com/go-logr/logr v1.2.3
 	github.com/go-logr/zapr v1.2.3
 	github.com/stretchr/testify v1.8.1
-	github.com/xenitab/pkg/kubernetes v0.0.1
+	github.com/xenitab/pkg/kubernetes v0.0.2
 	go.uber.org/zap v1.24.0
 	golang.org/x/sync v0.1.0
-	k8s.io/api v0.25.2
-	k8s.io/apimachinery v0.25.2
-	k8s.io/client-go v0.25.2
+	k8s.io/api v0.26.1
+	k8s.io/apimachinery v0.26.1
+	k8s.io/client-go v0.26.1
 	k8s.io/kubectl v0.25.0
 )
 
@@ -28,7 +28,7 @@ require (
 	github.com/exponent-io/jsonpath v0.0.0-20210407135951-1de76d718b3f // indirect
 	github.com/go-errors/errors v1.4.2 // indirect
 	github.com/go-openapi/jsonpointer v0.19.6 // indirect
-	github.com/go-openapi/jsonreference v0.20.1 // indirect
+	github.com/go-openapi/jsonreference v0.20.2 // indirect
 	github.com/go-openapi/swag v0.22.3 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
@@ -75,9 +75,9 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/cli-runtime v0.25.0 // indirect
 	k8s.io/component-base v0.25.0 // indirect
-	k8s.io/klog/v2 v2.80.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20221207184640-f3cff1453715 // indirect
-	k8s.io/utils v0.0.0-20221128185143-99ec85e7a448 // indirect
+	k8s.io/klog/v2 v2.90.0 // indirect
+	k8s.io/kube-openapi v0.0.0-20230123231816-1cb3ae25d79a // indirect
+	k8s.io/utils v0.0.0-20230115233650-391b47cb4029 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/kustomize/api v0.12.1 // indirect
 	sigs.k8s.io/kustomize/kyaml v0.13.9 // indirect
