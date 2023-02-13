@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"sort"
 	"time"
 
 	"github.com/avast/retry-go"
@@ -70,12 +69,13 @@ func ttlEvictionCandidate(ctx context.Context, client kubernetes.Interface,
 	clusterAutoscalerStatus *types.NamespacedName) (*corev1.Node, bool, error) {
 	log := logr.FromContextOrDiscard(ctx)
 
-	// Get nodes with expired TTL
+	// Get nodes with a set TTL value
 	nodeList, err := client.CoreV1().Nodes().List(ctx, metav1.ListOptions{LabelSelector: NodeTtlLabelKey})
 	if err != nil {
 		return nil, false, err
 	}
-	nodes := []corev1.Node{}
+
+	var candidate *corev1.Node
 	for i := range nodeList.Items {
 		node := nodeList.Items[i]
 		log := log.WithValues("node", node.Name)
@@ -127,26 +127,22 @@ func ttlEvictionCandidate(ctx context.Context, client kubernetes.Interface,
 			continue
 		}
 
-		nodes = append(nodes, node)
-	}
-	if len(nodes) == 0 {
-		return nil, false, nil
-	}
-
-	// Return first node if any that is currently being evicted
-	//nolint:gocritic // ignore
-	for _, node := range nodes {
+		// We should return early with node if it is eligible for eviction and already unschedulable.
 		// TODO: Should there be a more specific way to determine eviction in progress?
-		if !node.Spec.Unschedulable {
+		if node.Spec.Unschedulable {
+			log.Info("continuing with node that is already being evicted")
+			return &node, true, nil
+		}
+		// Skip node if current candidate is older.
+		if candidate != nil && node.CreationTimestamp.After(candidate.CreationTimestamp.Time) {
 			continue
 		}
-		return &node, true, nil
+		candidate = &node
 	}
-	// Return oldest node as candidate
-	sort.SliceStable(nodes, func(i, j int) bool {
-		return nodes[j].CreationTimestamp.After(nodes[i].CreationTimestamp.Time)
-	})
-	return &nodes[0], true, nil
+	if candidate == nil {
+		return nil, false, nil
+	}
+	return candidate, true, nil
 }
 
 // evictNode cordons and drains the specified node.
@@ -170,14 +166,16 @@ func evictNode(ctx context.Context, client kubernetes.Interface, node *corev1.No
 	err := retry.Do(func() error {
 		err := drain.RunCordonOrUncordon(helper, node, true)
 		if err != nil {
-			return err
+			return fmt.Errorf("could not cordon node %s: %w", node.Name, err)
 		}
 		err = drain.RunNodeDrain(helper, node.Name)
 		if err != nil {
-			return err
+			return fmt.Errorf("could not drain node %s: %w", node.Name, err)
 		}
 		return nil
-	}, retry.Attempts(5), retry.Delay(1*time.Second))
+	}, retry.OnRetry(func(n uint, err error) {
+		log.Error(err, "retrying drain due to error", "attempt", n)
+	}), retry.Attempts(5), retry.Delay(1*time.Second))
 	if err != nil {
 		return err
 	}
