@@ -29,20 +29,18 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args:
-            - --interval
-            - {{ .Values.nodeTtl.interval }}
-            - --status-config-map-name
-            - {{ .Values.nodeTtl.statusConfigMapName }}
-            - --status-config-map-namespace
-            - {{ .Values.nodeTtl.statusConfigMapNamespace }}
+            - --probe-addr=:{{ .Values.service.probe.port }}
+            - --interval={{ .Values.nodeTtl.interval }}
+            - --status-config-map-name={{ .Values.nodeTtl.statusConfigMapName }}
+            - --status-config-map-namespace={{ .Values.nodeTtl.statusConfigMapNamespace }}
           ports:
-            - name: http
-              containerPort: 8080
+            - name: probe
+              containerPort: {{ .Values.service.probe.port }}
               protocol: TCP
           readinessProbe:
             httpGet:
               path: /readyz
-              port: http
+              port: probe
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           resources:

@@ -22,7 +22,8 @@ import (
 )
 
 //nolint:lll //ignore
-type config struct {
+type arguments struct {
+	ProbeAddr                string        `arg:"--probe-addr" default:":8080" help:"address to serve probe."`
 	KubeConfigPath           string        `arg:"--kubeconfig" help:"path to the kubeconfig file"`
 	Interval                 time.Duration `arg:"--interval" default:"10m" help:"interval at which to evaluate node ttl"`
 	NodePoolMinCheck         bool          `arg:"--min-check" default:"true" help:"check if node pool min size will not allow scale down"`
@@ -31,8 +32,8 @@ type config struct {
 }
 
 func main() {
-	var cfg config
-	arg.MustParse(&cfg)
+	args := &arguments{}
+	arg.MustParse(args)
 
 	zapLog, err := zap.NewProduction()
 	if err != nil {
@@ -41,14 +42,15 @@ func main() {
 	}
 	log := zapr.NewLogger(zapLog)
 
-	if err := run(log, cfg); err != nil {
+	if err := run(log, args); err != nil {
 		log.Error(err, "runtime error")
 		os.Exit(1)
 	}
+	log.Info("gracefully shutdown")
 }
 
-func run(log logr.Logger, cfg config) error {
-	clientset, err := kubernetes.GetKubernetesClientset(cfg.KubeConfigPath)
+func run(log logr.Logger, args *arguments) error {
+	clientset, err := kubernetes.GetKubernetesClientset(args.KubeConfigPath)
 	if err != nil {
 		return err
 	}
@@ -60,39 +62,42 @@ func run(log logr.Logger, cfg config) error {
 
 	g.Go(func() error {
 		var nn *types.NamespacedName
-		if cfg.NodePoolMinCheck {
-			nn = &types.NamespacedName{Namespace: cfg.StatusConfigMapNamespace, Name: cfg.StatusConfigMapName}
+		if args.NodePoolMinCheck {
+			nn = &types.NamespacedName{Namespace: args.StatusConfigMapNamespace, Name: args.StatusConfigMapName}
 		}
-		err := ttl.Run(ctx, clientset, cfg.Interval, nn)
+		err := ttl.Run(ctx, clientset, args.Interval, nn)
 		if err != nil {
 			return err
 		}
 		return nil
 	})
 
-	handler := http.NewServeMux()
-	handler.HandleFunc("/readyz", func(w http.ResponseWriter, req *http.Request) {
+	probeMux := http.NewServeMux()
+	probeMux.HandleFunc("/readyz", func(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	srv := http.Server{Addr: ":8080", ReadHeaderTimeout: 10 * time.Second, Handler: handler}
+	probeSrv := http.Server{
+		Addr:              args.ProbeAddr,
+		ReadHeaderTimeout: 10 * time.Second,
+		Handler:           probeMux,
+	}
 	g.Go(func() error {
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := probeSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return err
 		}
 		return nil
 	})
 	g.Go(func() error {
 		<-ctx.Done()
-		if err := srv.Shutdown(context.Background()); err != nil {
+		if err := probeSrv.Shutdown(context.Background()); err != nil {
 			return err
 		}
 		return nil
 	})
 
-	log.Info("running")
+	log.Info("running Node TTL")
 	if err := g.Wait(); err != nil {
-		return fmt.Errorf("shutdown error: %w", err)
+		return err
 	}
-	log.Info("gracefully shutdown")
 	return nil
 }
