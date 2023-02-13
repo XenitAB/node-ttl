@@ -30,12 +30,16 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args:
             - --probe-addr=:{{ .Values.service.probe.port }}
+            - --metrics-addr=:{{ .Values.service.metrics.port }}
             - --interval={{ .Values.nodeTtl.interval }}
             - --status-config-map-name={{ .Values.nodeTtl.statusConfigMapName }}
             - --status-config-map-namespace={{ .Values.nodeTtl.statusConfigMapNamespace }}
           ports:
             - name: probe
               containerPort: {{ .Values.service.probe.port }}
+              protocol: TCP
+            - name: metrics
+              containerPort: {{ .Values.service.metrics.port }}
               protocol: TCP
           readinessProbe:
             httpGet:

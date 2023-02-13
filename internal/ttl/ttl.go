@@ -14,8 +14,20 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/kubectl/pkg/drain"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/xenitab/node-ttl/internal/status"
 )
+
+var evictedNodesTotal = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "node_ttl_evicted_nodes_total",
+	Help: "Total number of nodes that have been evicted due to TTL.",
+})
+
+var lastEvictionTimeSeconds = promauto.NewGauge(prometheus.GaugeOpts{
+	Name: "node_ttl_last_eviction_timestamp_seconds",
+	Help: "The date at which the last successful eviction occured. Expressed as a Unix Epoch Time.",
+})
 
 const (
 	NodeTtlLabelKey      = "xkf.xenit.io/node-ttl"
@@ -172,6 +184,7 @@ func evictNode(ctx context.Context, client kubernetes.Interface, node *corev1.No
 		if err != nil {
 			return fmt.Errorf("could not drain node %s: %w", node.Name, err)
 		}
+		// Wait for node to be deleted
 		return nil
 	}, retry.OnRetry(func(n uint, err error) {
 		log.Error(err, "retrying drain due to error", "attempt", n)
@@ -200,5 +213,7 @@ func evictNextExpiredNode(ctx context.Context, client kubernetes.Interface, clus
 		return err
 	}
 	log.Info("eviction complete", "node", node.Name)
+	evictedNodesTotal.Inc()
+	lastEvictionTimeSeconds.Set(float64(time.Now().Unix()))
 	return nil
 }

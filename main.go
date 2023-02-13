@@ -14,6 +14,7 @@ import (
 	"github.com/alexflint/go-arg"
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/xenitab/pkg/kubernetes"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/types"
@@ -24,6 +25,7 @@ import (
 //nolint:lll //ignore
 type arguments struct {
 	ProbeAddr                string        `arg:"--probe-addr" default:":8080" help:"address to serve probe."`
+	MetricsAddr              string        `arg:"--metrics-addr" default:":9090" help:"address to serve metrics."`
 	KubeConfigPath           string        `arg:"--kubeconfig" help:"path to the kubeconfig file"`
 	Interval                 time.Duration `arg:"--interval" default:"10m" help:"interval at which to evaluate node ttl"`
 	NodePoolMinCheck         bool          `arg:"--min-check" default:"true" help:"check if node pool min size will not allow scale down"`
@@ -70,6 +72,25 @@ func run(log logr.Logger, args *arguments) error {
 			return err
 		}
 		return nil
+	})
+
+	metricsMux := http.NewServeMux()
+	metricsMux.Handle("/metrics", promhttp.Handler())
+	metricsSrv := &http.Server{
+		Addr:    args.MetricsAddr,
+		Handler: metricsMux,
+	}
+	g.Go(func() error {
+		if err := metricsSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return err
+		}
+		return nil
+	})
+	g.Go(func() error {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		return metricsSrv.Shutdown(shutdownCtx)
 	})
 
 	probeMux := http.NewServeMux()

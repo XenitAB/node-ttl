@@ -1,0 +1,14 @@
+{{- if .Values.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "node-ttl.fullname" . }}
+  labels:
+    {{- include "node-ttl.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "node-ttl.selectorLabels" . | nindent 6 }}
+  endpoints:
+    - port: metrics
+{{- end }}
