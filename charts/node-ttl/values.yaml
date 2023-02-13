@@ -39,6 +39,9 @@ affinity: {}
 serviceMonitor:
   enabled: false
 
+networkPolicy:
+  enabled: true
+
 nodeTtl:
   interval: 10m
   statusConfigMapName: cluster-autoscaler-status
