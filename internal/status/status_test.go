@@ -56,11 +56,10 @@ func TestGetNodePoolReadyAndMinCountNotFound(t *testing.T) {
 
 func TestHasScaleDownCapacity(t *testing.T) {
 	type test struct {
-		name         string
-		nodePoolName string
-		ready        int
-		min          int
-		isSafe       bool
+		name   string
+		ready  int
+		min    int
+		isSafe bool
 	}
 
 	tests := []test{
@@ -119,7 +118,9 @@ func mockClusterAutoscalerStatus(t *testing.T, nodePools []testNodePool) string 
 
 	NodeGroups:`
 
+	//nolint:gocritic // ignore
 	for _, nodePool := range nodePools {
+		//nolint:lll // ignore
 		status = fmt.Sprintf(`%[1]s
 	  Name:        %[2]s
 	  Health:      Healthy (ready=%[3]d unready=0 notStarted=0 longNotStarted=0 registered=%[3]d longUnregistered=0 cloudProviderTarget=%[3]d (minSize=%[4]d, maxSize=0))
@@ -133,7 +134,6 @@ func mockClusterAutoscalerStatus(t *testing.T, nodePools []testNodePool) string 
 	               LastTransitionTime: 2022-08-08 12:03:59.241031335 +0000 UTC m=+674455.564714746
 
         `, status, nodePool.name, nodePool.ready, nodePool.min)
-
 	}
 	return status
 }
