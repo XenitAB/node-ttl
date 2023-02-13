@@ -20,7 +20,7 @@ docker-build:
 
 .PHONY: e2e
 .ONESHELL:
-e2e: docker-build docker-build-cluster-autoscaler
+e2e: docker-build
 	set -ex
 
 	TMP_DIR=$$(mktemp -d)
@@ -31,7 +31,6 @@ e2e: docker-build docker-build-cluster-autoscaler
 	# Create kind cluster and load images
 	kind create cluster --kubeconfig $$KIND_KUBECONFIG
 	kind load docker-image ${IMG}
-	kind load docker-image staging-k8s.gcr.io/cluster-autoscaler-amd64:dev
 	docker pull quay.io/elmiko/kubemark:v1.25.3
 	kind load docker-image quay.io/elmiko/kubemark:v1.25.3
 
@@ -62,12 +61,3 @@ e2e: docker-build docker-build-cluster-autoscaler
 
 	# Delete cluster
 	kind delete cluster
-
-docker-build-cluster-autoscaler:
-	TMP_DIR=$$(mktemp -d)
-	cd $$TMP_DIR
-	git clone https://github.com/kubernetes/autoscaler
-	cd autoscaler/cluster-autoscaler
-	git checkout cluster-autoscaler-1.25.0
-	BUILD_TAGS=kubemark make build
-	make make-image
