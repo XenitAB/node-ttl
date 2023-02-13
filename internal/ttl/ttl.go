@@ -26,7 +26,7 @@ var evictedNodesTotal = promauto.NewCounter(prometheus.CounterOpts{
 
 var lastEvictionTimeSeconds = promauto.NewGauge(prometheus.GaugeOpts{
 	Name: "node_ttl_last_eviction_timestamp_seconds",
-	Help: "The date at which the last successful eviction occured. Expressed as a Unix Epoch Time.",
+	Help: "The date at which the last successful eviction occurred. Expressed as a Unix Epoch Time.",
 })
 
 const (

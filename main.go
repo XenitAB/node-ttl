@@ -77,8 +77,9 @@ func run(log logr.Logger, args *arguments) error {
 	metricsMux := http.NewServeMux()
 	metricsMux.Handle("/metrics", promhttp.Handler())
 	metricsSrv := &http.Server{
-		Addr:    args.MetricsAddr,
-		Handler: metricsMux,
+		Addr:              args.MetricsAddr,
+		ReadHeaderTimeout: 10 * time.Second,
+		Handler:           metricsMux,
 	}
 	g.Go(func() error {
 		if err := metricsSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {

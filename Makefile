@@ -6,13 +6,7 @@ all: fmt vet lint
 lint:
 	golangci-lint run ./...
 
-fmt:
-	go fmt ./...
-
-vet:
-	go vet ./...
-
-test: fmt vet
+test:
 	go test --cover ./...
 
 docker-build:

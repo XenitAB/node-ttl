@@ -44,14 +44,15 @@ func getNodePoolName(node *corev1.Node) (string, error) {
 		// Custom handling for different cloud provider is required because Cluster Autoscaler will use VMSS or ASG names for the pool name.
 		switch key {
 		case AzureNodePoolLabelKey:
-			// Azure agent pool label will only give the pool name used when creating it in AKS. The pool name used in the CA status is the name
-			// of the VMSS automatically created by AKS. The Node name will be the same as the VMSS name with a unique instance suffix. The label
-			// fetching is only done to check for an AKS cluster. The Node name with the suffix removed is instead used as the pool name.
+			// Azure agent pool label will only give the pool name used when creating it in AKS. The pool name used in the CA
+			// status is the name of the VMSS automatically created by AKS. The Node name will be the same as the VMSS name with
+			// a unique instance suffix. The label fetching is only done to check for an AKS cluster. The Node name with the
+			// suffix removed is instead used as the pool name.
 			nodePoolName = node.Name[:strings.LastIndex(node.Name, "-vmss")+5]
 		case AWSNodePoolLabelKey:
-			// AWS will use the generated ASG name for the pool name in the CA. This value cannot be found in the Node metadata. The name is however,
-			// predicatable as it will be the same as the EKS node pool name with an additonal UUID as a suffix. This is why the UUID regex has to be
-			// appended to the end.
+			// AWS will use the generated ASG name for the pool name in the CA. This value cannot be found in the Node metadata.
+			// The name is however, predicatable as it will be the same as the EKS node pool name with an additional UUID as a
+			// suffix. This is why the UUID regex has to be appended to the end.
 			nodePoolName = fmt.Sprintf("eks-%s-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", nodePoolName)
 		}
 		return nodePoolName, nil
@@ -81,7 +82,7 @@ func getNodePoolHealth(status string, nodePoolName string) (string, error) {
 		return "", fmt.Errorf("could not find status for node pool: %s", nodePoolName)
 	}
 	if len(matches) != 2 {
-		return "", fmt.Errorf("expected match list to be of lenght 2 not: %d", len(matches))
+		return "", fmt.Errorf("expected match list to be of length 2 not: %d", len(matches))
 	}
 	return matches[1], nil
 }
