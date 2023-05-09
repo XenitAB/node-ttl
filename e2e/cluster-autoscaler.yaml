@@ -310,7 +310,7 @@ spec:
       dnsPolicy: "ClusterFirst"
       containers:
         - name: kubemark-cluster-autoscaler
-          image: "ghcr.io/xenitab/cluster-autoscaler-kubemark:1.25.0"
+          image: "ghcr.io/xenitab/cluster-autoscaler-kubemark:1.26.0"
           command:
             - ./cluster-autoscaler
             - --cloud-provider=kubemark
