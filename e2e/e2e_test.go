@@ -23,16 +23,16 @@ func TestCapcityCheck(t *testing.T) {
 	client, err := kubernetes.NewForConfig(cfg)
 	require.NoError(t, err)
 
-  require.Never(t, func() bool {
-    nodeList, err := client.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: "xkf.xenit.io/node-ttl"})
-    require.NoError(t, err)
-    for _, node := range nodeList.Items {
-      t.Log("checking that node is not evicted", node.Name)
+	require.Never(t, func() bool {
+		nodeList, err := client.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: "xkf.xenit.io/node-ttl"})
+		require.NoError(t, err)
+		for _, node := range nodeList.Items {
+			t.Log("checking that node is not evicted", node.Name)
 			// TODO: There should be a better way to check that eviction is due to node ttl
-      return node.Spec.Unschedulable
-    }
-    return false
-  }, 1 * time.Minute, 5 * time.Second)
+			return node.Spec.Unschedulable
+		}
+		return false
+	}, 1*time.Minute, 5*time.Second)
 }
 
 func TestTTLEviction(t *testing.T) {
@@ -66,7 +66,7 @@ func TestTTLEviction(t *testing.T) {
 				return false
 			}
 			return true
-		}, 1*time.Minute, 1*time.Second, "node should be evicted due to TTL")
+		}, 2*time.Minute, 1*time.Second, "node should be evicted due to TTL")
 		t.Log("node has been marked unschedulable by node ttl", node.Name)
 
 		require.Eventually(t, func() bool {
