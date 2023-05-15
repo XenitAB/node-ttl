@@ -5,8 +5,8 @@ go 1.19
 require (
 	github.com/alexflint/go-arg v1.4.3
 	github.com/avast/retry-go v3.0.0+incompatible
-	github.com/go-logr/logr v1.2.3
-	github.com/go-logr/zapr v1.2.3
+	github.com/go-logr/logr v1.2.4
+	github.com/go-logr/zapr v1.2.4
 	github.com/prometheus/client_golang v1.15.1
 	github.com/stretchr/testify v1.8.1
 	github.com/xenitab/pkg/kubernetes v0.0.2
