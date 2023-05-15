@@ -8,7 +8,7 @@ require (
 	github.com/go-logr/logr v1.2.4
 	github.com/go-logr/zapr v1.2.4
 	github.com/prometheus/client_golang v1.15.1
-	github.com/stretchr/testify v1.8.1
+	github.com/stretchr/testify v1.8.2
 	github.com/xenitab/pkg/kubernetes v0.0.4
 	go.uber.org/zap v1.24.0
 	golang.org/x/sync v0.2.0
