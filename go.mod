@@ -11,7 +11,7 @@ require (
 	github.com/stretchr/testify v1.8.1
 	github.com/xenitab/pkg/kubernetes v0.0.4
 	go.uber.org/zap v1.24.0
-	golang.org/x/sync v0.1.0
+	golang.org/x/sync v0.2.0
 	k8s.io/api v0.27.1
 	k8s.io/apimachinery v0.27.1
 	k8s.io/client-go v0.27.1
