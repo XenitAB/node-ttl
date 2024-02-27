@@ -2,6 +2,8 @@ package status
 
 import (
 	"fmt"
+	"github.com/xenitab/node-ttl/internal/utils"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -14,6 +16,8 @@ const (
 	AWSNodePoolLabelKey      = "eks.amazonaws.com/nodegroup"
 	KubemarkNodePoolLabelKey = "autoscaling.k8s.io/nodegroup"
 )
+
+var CustomNodeLabelKey = os.Getenv("CUSTOM_NODE_POOL_LABEL_KEY")
 
 func HasScaleDownCapacity(status string, node *corev1.Node) (bool, error) {
 	nodePoolName, err := getNodePoolName(node)
@@ -31,7 +35,11 @@ func HasScaleDownCapacity(status string, node *corev1.Node) (bool, error) {
 }
 
 func getNodePoolLabelKeys() []string {
-	return []string{AzureNodePoolLabelKey, AWSNodePoolLabelKey, KubemarkNodePoolLabelKey}
+	defaultKey := []string{AzureNodePoolLabelKey, AWSNodePoolLabelKey, KubemarkNodePoolLabelKey}
+	if CustomNodeLabelKey != "" {
+		return append(defaultKey, CustomNodeLabelKey)
+	}
+	return defaultKey
 }
 
 func getNodePoolName(node *corev1.Node) (string, error) {
@@ -54,6 +62,11 @@ func getNodePoolName(node *corev1.Node) (string, error) {
 			// The name is however, predicatable as it will be the same as the EKS node pool name with an additional UUID as a
 			// suffix. This is why the UUID regex has to be appended to the end.
 			nodePoolName = fmt.Sprintf("eks-%s-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", nodePoolName)
+		case CustomNodeLabelKey:
+			// To be able to configure any kind of node pool label and name, a custom label format can be set.
+			//That is using Sprintf formatting to provide the regex.
+			nodePoolName = fmt.Sprintf(utils.GetEnvOrDefault("CUSTOM_NODE_POOL_NAME_FORMAT", "%s"), nodePoolName)
+
 		}
 		return nodePoolName, nil
 	}
