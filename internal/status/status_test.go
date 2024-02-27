@@ -172,6 +172,15 @@ func getNodePoolNameAndNode(t *testing.T, cp string, name string) (*corev1.Node,
 				},
 			},
 		}, name
+	case CustomNodeLabelKey:
+		return &corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name,
+				Labels: map[string]string{
+					CustomNodeLabelKey: name,
+				},
+			},
+		}, fmt.Sprintf("custom-%s", name)
 	default:
 		t.Fatal("unknown key")
 		return nil, ""

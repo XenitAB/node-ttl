@@ -69,6 +69,23 @@ metadata:
     cluster-autoscaler.kubernetes.io/safe-to-evict: false
 ```
 
+### Adding Custom Node Pool Label key And Pool name
+
+If the node pool label key and pool name are different from the pre-defined values, 
+you can set the `customNodeLabelKey` and `customNodePoolNameFormat` values in the `values.yaml` file.
+
+```yaml
+customNodeLabelKey: "cloud.google.com/gke-nodepool" # Required
+customNodePoolNameFormat: "example-%s" # Optional (default: "%s")
+```
+
+or use the env variables `CUSTOM_NODE_POOL_LABEL_KEY` and `CUSTOM_NODE_POOL_NAME_FORMAT` to set the values. 
+
+```shell
+CUSTOM_NODE_POOL_LABEL_KEY=cloud.google.com/gke-nodepool
+CUSTOM_NODE_POOL_NAME_FORMAT=example-%s
+```
+
 ### Cluster Autoscaler Status
 
 A node pool where the min count is equal to the current node count will node be scaled down by cluster autoscaler. Even if the node is completely unused and a scale down candidate. This is because the cluster austoscaler has to fulfill the minum count requirement. This is an issue for Node TTL as it relies on cluster autoscaler node removal to replace nodes. If a node in this case were to be cordoned and drained the node would get stuck forever without any Pods scheduled to it. In a perfect world cluster autoscaler would allow the node removal and create a new node or alternativly preemptivly add a new node to the node pool.

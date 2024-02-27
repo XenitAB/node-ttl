@@ -28,6 +28,17 @@ spec:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if .Values.customNodeLabelKey }}
+          env:
+            {{- if .Values.customNodeLabelKey }}
+            - name: CUSTOM_NODE_POOL_LABEL_KEY
+              value: {{ .Values.customNodeLabelKey }}
+            {{- end }}
+            {{- if .Values.customNodePoolNameFormat }}
+            - name: CUSTOM_NODE_POOL_NAME_FORMAT
+              value: {{ .Values.customNodePoolNameFormat }}
+            {{- end }}
+          {{- end }}
           args:
             - --probe-addr=:{{ .Values.service.probe.port }}
             - --metrics-addr=:{{ .Values.service.metrics.port }}
