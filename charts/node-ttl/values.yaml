@@ -46,3 +46,8 @@ nodeTtl:
   interval: 10m
   statusConfigMapName: cluster-autoscaler-status
   statusConfigMapNamespace: cluster-autoscaler
+
+customNodeLabelKey: "" # Must be set to a non-empty value to enable custom node label
+# it should be a format string with one %s to be replaced by the custom node label value (e.g. "node-pool-%s")
+# with optional regexp to match the node pool name against (e.g. "node-pool-(.*)")
+customNodePoolNameFormat: "" # default: "%s"

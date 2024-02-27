@@ -4,22 +4,24 @@ Enforces a time to live (TTL) on Kubernetes nodes and evicts nodes which have ex
 
 ## Values
 
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| affinity | object | `{}` |  |
-| fullnameOverride | string | `""` |  |
-| image.pullPolicy | string | `"IfNotPresent"` |  |
-| image.repository | string | `"ghcr.io/xenitab/node-ttl"` |  |
-| image.tag | string | `""` |  |
-| imagePullSecrets | list | `[]` |  |
-| nameOverride | string | `""` |  |
-| nodeSelector | object | `{}` |  |
-| nodeTtl.interval | string | `"10m"` |  |
-| podAnnotations | object | `{}` |  |
-| podSecurityContext.seccompProfile.type | string | `"RuntimeDefault"` |  |
-| resources | object | `{}` |  |
-| securityContext.capabilities.drop[0] | string | `"ALL"` |  |
-| securityContext.readOnlyRootFilesystem | bool | `true` |  |
-| securityContext.runAsNonRoot | bool | `true` |  |
-| securityContext.runAsUser | int | `65532` |  |
-| tolerations | list | `[]` |  |
+| Key                                    | Type   | Default                      | Description                                                                                                                                                                                   |
+|----------------------------------------|--------|------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| affinity                               | object | `{}`                         |                                                                                                                                                                                               |
+| fullnameOverride                       | string | `""`                         |                                                                                                                                                                                               |
+| image.pullPolicy                       | string | `"IfNotPresent"`             |                                                                                                                                                                                               |
+| image.repository                       | string | `"ghcr.io/xenitab/node-ttl"` |                                                                                                                                                                                               |
+| image.tag                              | string | `""`                         |                                                                                                                                                                                               |
+| imagePullSecrets                       | list   | `[]`                         |                                                                                                                                                                                               |
+| nameOverride                           | string | `""`                         |                                                                                                                                                                                               |
+| nodeSelector                           | object | `{}`                         |                                                                                                                                                                                               |
+| nodeTtl.interval                       | string | `"10m"`                      |                                                                                                                                                                                               |
+| podAnnotations                         | object | `{}`                         |                                                                                                                                                                                               |
+| podSecurityContext.seccompProfile.type | string | `"RuntimeDefault"`           |                                                                                                                                                                                               |
+| resources                              | object | `{}`                         |                                                                                                                                                                                               |
+| securityContext.capabilities.drop[0]   | string | `"ALL"`                      |                                                                                                                                                                                               |
+| securityContext.readOnlyRootFilesystem | bool   | `true`                       |                                                                                                                                                                                               |
+| securityContext.runAsNonRoot           | bool   | `true`                       |                                                                                                                                                                                               |
+| securityContext.runAsUser              | int    | `65532`                      |                                                                                                                                                                                               |
+| tolerations                            | list   | `[]`                         |                                                                                                                                                                                               |
+| customNodeLabelKey                     | string | ``                           | Must be set to a non-empty value to enable custom node label                                                                                                                                  |
+| customNodePoolNameFormat               | string | ``                           | It should be a format string with one %s to be replaced by the custom node label value (e.g. "node-pool-%s") with optional regexp to match the node pool name against (e.g. "node-pool-(.*)") |
