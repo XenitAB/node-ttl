@@ -2,10 +2,10 @@ package status
 
 import (
 	"fmt"
-	"regexp"
-	"strconv"
+	"log"
 	"strings"
 
+	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -72,34 +72,32 @@ func getNodePoolReadyAndMinCount(status, nodePoolName string) (int, int, error) 
 	return ready, min, nil
 }
 
-func getNodePoolHealth(status string, nodePoolName string) (string, error) {
-	reg, err := regexp.Compile(fmt.Sprintf(`\s*Name:\s*%s\n\s*Health:\s*(.*)`, nodePoolName))
+func getNodePoolHealth(status string, nodePoolName string) (interface{}, error) {
+
+	data := make(map[string]interface{})
+
+	err := yaml.Unmarshal([]byte(status), &data)
 	if err != nil {
-		return "", err
+		log.Fatalf("error: %v", err)
+		return "", fmt.Errorf("could not unmarshal the cluster-autoscaler status")
 	}
-	matches := reg.FindStringSubmatch(status)
-	if len(matches) == 0 {
-		return "", fmt.Errorf("could not find status for node pool: %s", nodePoolName)
+
+	for _, myMap := range data["nodeGroups"].([]interface{}) {
+		x := myMap.(map[string]interface{})
+		if x["name"] == nodePoolName {
+			return x["health"], nil
+		}
 	}
-	if len(matches) != 2 {
-		return "", fmt.Errorf("expected match list to be of length 2 not: %d", len(matches))
-	}
-	return matches[1], nil
+	return "", fmt.Errorf("could not find status for node pool: %s", nodePoolName)
+
 }
 
-func getReadyAndMinCount(health string) (int, int, error) {
-	reg := regexp.MustCompile(`Healthy \(ready=(\d+).*minSize=(\d+)`)
-	matches := reg.FindStringSubmatch(health)
-	if len(matches) != 3 {
-		return 0, 0, fmt.Errorf("expected match list to be of length 3: %d", len(matches))
-	}
-	ready, err := strconv.Atoi(matches[1])
-	if err != nil {
-		return 0, 0, fmt.Errorf("could not convert ready count to int: %w", err)
-	}
-	min, err := strconv.Atoi(matches[2])
-	if err != nil {
-		return 0, 0, fmt.Errorf("could not convert min count to int: %w", err)
-	}
-	return ready, min, nil
+func getReadyAndMinCount(health interface{}) (int, int, error) {
+	healthmap := health.(map[string]interface{})
+	minSize := healthmap["minSize"].(int)
+	nodeCounts := healthmap["nodeCounts"].(map[string]interface{})
+	registerednodes := nodeCounts["registered"].(map[string]interface{})
+	ready := registerednodes["ready"].(int)
+
+	return ready, minSize, nil
 }
