@@ -1,8 +1,6 @@
 module github.com/xenitab/node-ttl
 
-go 1.23.0
-
-toolchain go1.23.5
+go 1.23
 
 require (
 	github.com/alexflint/go-arg v1.5.1
