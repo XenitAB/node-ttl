@@ -36,6 +36,7 @@ func getNodePoolLabelKeys() []string {
 
 func getNodePoolName(node *corev1.Node) (string, error) {
 	for _, key := range getNodePoolLabelKeys() {
+		//nolint:staticcheck // ignore this
 		nodePoolName, ok := node.ObjectMeta.Labels[key]
 		if !ok {
 			continue

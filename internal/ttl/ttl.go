@@ -30,6 +30,7 @@ var lastEvictionTimeSeconds = promauto.NewGauge(prometheus.GaugeOpts{
 })
 
 const (
+	//nolint:staticcheck // ignore this
 	NodeTtlLabelKey      = "xkf.xenit.io/node-ttl"
 	ScaleDownDisabledKey = "cluster-autoscaler.kubernetes.io/scale-down-disabled"
 	PodSafeToEvictKey    = "cluster-autoscaler.kubernetes.io/safe-to-evict"
@@ -44,6 +45,7 @@ func nodeContainsNotSafeToEvictPods(ctx context.Context, client kubernetes.Inter
 	}
 	for i := range podList.Items {
 		pod := podList.Items[i]
+		//nolint:staticcheck // ignore this
 		if value, ok := pod.ObjectMeta.Annotations[PodSafeToEvictKey]; ok && value == "false" {
 			return true, nil
 		}
@@ -55,9 +57,11 @@ func nodeContainsNotSafeToEvictPods(ctx context.Context, client kubernetes.Inter
 func nodeHasExpired(node *corev1.Node) (bool, error) {
 	// Skip node which has not yet a creating timestamp
 	nullTime := time.Time{}
+	//nolint:staticcheck // ignore this
 	if node.CreationTimestamp.Time == nullTime {
 		return false, nil
 	}
+	//nolint:staticcheck // ignore this
 	ttlValue, ok := node.ObjectMeta.Labels[NodeTtlLabelKey]
 	if !ok {
 		return false, fmt.Errorf("could not find ttl label in node: %s", NodeTtlLabelKey)
@@ -93,6 +97,7 @@ func ttlEvictionCandidate(ctx context.Context, client kubernetes.Interface,
 		log := log.WithValues("node", node.Name)
 
 		// Scale down disabled annotation
+		//nolint:staticcheck // ignore this
 		if value, ok := node.ObjectMeta.Annotations[ScaleDownDisabledKey]; ok && value == "true" {
 			log.Info("skipping node with scale down disabled")
 			continue
