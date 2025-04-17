@@ -11,7 +11,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
-func testNodeWithTtl(name string, creationOffest *time.Duration, ttl time.Duration, evicting bool) *corev1.Node {
+func testNodeWithTTL(name string, creationOffest *time.Duration, ttl time.Duration, evicting bool) *corev1.Node {
 	var creationTimestamp *metav1.Time
 	if creationOffest != nil {
 		creationTimestamp = &metav1.Time{Time: time.Now().Add(*creationOffest)}
@@ -110,7 +110,7 @@ func TestExpiredTtl(t *testing.T) {
 			ctx := context.TODO()
 			client := fake.NewSimpleClientset()
 			for _, n := range tt.nodes {
-				node := testNodeWithTtl(n.name, &n.creationOffest, n.ttl, n.evicting)
+				node := testNodeWithTTL(n.name, &n.creationOffest, n.ttl, n.evicting)
 				_, err := client.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{})
 				require.NoError(t, err)
 			}
