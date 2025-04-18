@@ -1,4 +1,4 @@
-FROM golang:1.23 AS builder
+FROM golang:1.24 AS builder
 RUN mkdir /build
 WORKDIR /build
 COPY go.mod go.mod
