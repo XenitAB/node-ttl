@@ -2,10 +2,12 @@ package status
 
 import (
 	"fmt"
+	"log"
 	"regexp"
 	"strconv"
 	"strings"
 
+	yaml "github.com/goccy/go-yaml"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -20,7 +22,7 @@ func HasScaleDownCapacity(status string, node *corev1.Node) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	ready, min, err := getNodePoolReadyAndMinCount(status, nodePoolName)
+	ready, min, err := getNodePoolReadyAndMinCount(node.Status.NodeInfo.KubeletVersion, status, nodePoolName)
 	if err != nil {
 		return false, err
 	}
@@ -61,46 +63,117 @@ func getNodePoolName(node *corev1.Node) (string, error) {
 	return "", fmt.Errorf("could not find node pool label in node: %s", node.Name)
 }
 
-func getNodePoolReadyAndMinCount(status, nodePoolName string) (int, int, error) {
+func getNodePoolReadyAndMinCount(kubeletVersion, status, nodePoolName string) (int, int, error) {
+	// Assume we are running at least v1.2.X
+	preV130 := strings.Contains(kubeletVersion, "v1.2")
+	if preV130 {
+		health, err := getNodePoolHealthPreV130(status, nodePoolName)
+		if err != nil {
+			return 0, 0, err
+		}
+		ready, min, err := getReadyAndMinCountPreV130(health)
+		return ready, min, err
+	}
+
+	// v1.3.X or later
 	health, err := getNodePoolHealth(status, nodePoolName)
 	if err != nil {
 		return 0, 0, err
 	}
-	ready, min, err := getReadyAndMinCount(health)
-	if err != nil {
-		return 0, 0, err
-	}
+	ready, min := getReadyAndMinCount(health)
 	return ready, min, nil
 }
 
-func getNodePoolHealth(status string, nodePoolName string) (string, error) {
+func getNodePoolHealthPreV130(status string, nodePoolName string) (string, error) {
 	reg, err := regexp.Compile(fmt.Sprintf(`\s*Name:\s*%s\n\s*Health:\s*(.*)`, nodePoolName))
 	if err != nil {
 		return "", err
 	}
+
 	matches := reg.FindStringSubmatch(status)
 	if len(matches) == 0 {
 		return "", fmt.Errorf("could not find status for node pool: %s", nodePoolName)
 	}
+
 	if len(matches) != 2 {
 		return "", fmt.Errorf("expected match list to be of length 2 not: %d", len(matches))
 	}
 	return matches[1], nil
 }
 
-func getReadyAndMinCount(health string) (int, int, error) {
+func getNodePoolHealth(status string, nodePoolName string) (interface{}, error) {
+	data := make(map[string]interface{})
+
+	err := yaml.Unmarshal([]byte(status), &data)
+	if err != nil {
+		log.Fatalf("error: %v", err)
+		return "", fmt.Errorf("could not unmarshal the cluster-autoscaler status")
+	}
+
+	ng, ok := data["nodeGroups"].([]interface{})
+	if ok {
+		for _, myMap := range ng {
+			x, ok := myMap.(map[string]interface{})
+			if !ok {
+				break
+			}
+
+			if x["name"] == nodePoolName {
+				health := x["health"]
+				if health != nil {
+					return x["health"], nil
+				}
+			}
+		}
+	}
+
+	return "", fmt.Errorf("could not find status for node pool: %s", nodePoolName)
+}
+
+func getReadyAndMinCountPreV130(health string) (int, int, error) {
 	reg := regexp.MustCompile(`Healthy \(ready=(\d+).*minSize=(\d+)`)
 	matches := reg.FindStringSubmatch(health)
 	if len(matches) != 3 {
 		return 0, 0, fmt.Errorf("expected match list to be of length 3: %d", len(matches))
 	}
+
 	ready, err := strconv.Atoi(matches[1])
 	if err != nil {
 		return 0, 0, fmt.Errorf("could not convert ready count to int: %w", err)
 	}
+
 	min, err := strconv.Atoi(matches[2])
 	if err != nil {
 		return 0, 0, fmt.Errorf("could not convert min count to int: %w", err)
 	}
 	return ready, min, nil
+}
+
+func getReadyAndMinCount(health interface{}) (int, int) {
+	healthmap, ok := health.(map[string]interface{})
+	if !ok {
+		return 0, 0
+	}
+
+	minSize, ok := healthmap["minSize"].(int)
+	if !ok {
+		return 0, 0
+	}
+
+	nodeCounts, ok := healthmap["nodeCounts"].(map[string]interface{})
+	if !ok {
+		return 0, 0
+	}
+
+	registerednodes, ok := nodeCounts["registered"].(map[string]interface{})
+	if !ok {
+		return 0, 0
+	}
+
+	ready, ok := registerednodes["ready"].(int)
+	if !ok {
+		return 0, 0
+	}
+
+	return ready, minSize
 }
