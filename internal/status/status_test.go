@@ -32,9 +32,9 @@ func TestGetNodePoolReadyAndMinCountExisting(t *testing.T) {
 			min:   35,
 		},
 	}
-	status := mockClusterAutoscalerStatus(t, nodePools)
+	status := mockClusterAutoscalerStatusPreV130(t, nodePools)
 	for _, nodePool := range nodePools {
-		ready, min, err := getNodePoolReadyAndMinCount(status, nodePool.name)
+		ready, min, err := getNodePoolReadyAndMinCount("v1.25.3", status, nodePool.name)
 		require.NoError(t, err)
 		require.Equal(t, nodePool.ready, ready)
 		require.Equal(t, nodePool.min, min)
@@ -49,8 +49,8 @@ func TestGetNodePoolReadyAndMinCountNotFound(t *testing.T) {
 			min:   22,
 		},
 	}
-	status := mockClusterAutoscalerStatus(t, nodePools)
-	_, _, err := getNodePoolReadyAndMinCount(status, "bar")
+	status := mockClusterAutoscalerStatusPreV130(t, nodePools)
+	_, _, err := getNodePoolReadyAndMinCount("v1.25.3", status, "bar")
 	require.EqualError(t, err, "could not find status for node pool: bar")
 }
 
@@ -86,7 +86,7 @@ func TestHasScaleDownCapacity(t *testing.T) {
 					ready: tt.ready,
 					min:   tt.min,
 				}
-				status := mockClusterAutoscalerStatus(t, []testNodePool{nodePool})
+				status := mockClusterAutoscalerStatusPreV130(t, []testNodePool{nodePool})
 				ok, err := HasScaleDownCapacity(status, node)
 				require.NoError(t, err)
 				require.Equal(t, tt.isSafe, ok)
@@ -101,7 +101,7 @@ type testNodePool struct {
 	min   int
 }
 
-func mockClusterAutoscalerStatus(t *testing.T, nodePools []testNodePool) string {
+func mockClusterAutoscalerStatusPreV130(t *testing.T, nodePools []testNodePool) string {
 	t.Helper()
 
 	status := `Cluster-autoscaler status at 2022-08-11 12:35:11.797051423 +0000 UTC:
@@ -152,6 +152,11 @@ func getNodePoolNameAndNode(t *testing.T, cp string, name string) (*corev1.Node,
 					AzureNodePoolLabelKey: name,
 				},
 			},
+			Status: corev1.NodeStatus{
+				NodeInfo: corev1.NodeSystemInfo{
+					KubeletVersion: "v1.25.3",
+				},
+			},
 		}, nodePoolName
 	case AWSNodePoolLabelKey:
 		eksNodePoolName := fmt.Sprintf("dev-eks2-%s", name)
@@ -162,6 +167,11 @@ func getNodePoolNameAndNode(t *testing.T, cp string, name string) (*corev1.Node,
 					AWSNodePoolLabelKey: eksNodePoolName,
 				},
 			},
+			Status: corev1.NodeStatus{
+				NodeInfo: corev1.NodeSystemInfo{
+					KubeletVersion: "v1.25.3",
+				},
+			},
 		}, fmt.Sprintf("eks-%s-c8c2d2a8-2d51-8764-1776-0b3f58267273", eksNodePoolName)
 	case KubemarkNodePoolLabelKey:
 		return &corev1.Node{
@@ -169,6 +179,11 @@ func getNodePoolNameAndNode(t *testing.T, cp string, name string) (*corev1.Node,
 				Name: name,
 				Labels: map[string]string{
 					KubemarkNodePoolLabelKey: name,
+				},
+			},
+			Status: corev1.NodeStatus{
+				NodeInfo: corev1.NodeSystemInfo{
+					KubeletVersion: "v1.25.3",
 				},
 			},
 		}, name
