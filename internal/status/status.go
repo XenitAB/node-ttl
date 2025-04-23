@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	yaml "github.com/goccy/go-yaml"
 	corev1 "k8s.io/api/core/v1"
@@ -17,11 +18,66 @@ const (
 	KubemarkNodePoolLabelKey = "autoscaling.k8s.io/nodegroup"
 )
 
+type ClusterWideType struct {
+	Health    HealthType     `yaml:"health"`
+	ScaleUp   *ScaleUpType   `yaml:"scaleUp"`
+	ScaleDown *ScaleDownType `yaml:"scaleDown"`
+}
+
+type HealthType struct {
+	Status              string          `yaml:"status"`
+	NodeCounts          *NodeCountsType `yaml:"nodeCounts,omitempty"`
+	CloudProviderTarget int             `yaml:"cloudProviderTarget"`
+	MinSize             int             `yaml:"minSize"`
+	MaxSize             int             `yaml:"maxSize"`
+	LastProbeTime       time.Time       `yaml:"lastProbeTime"`
+	LastTransitionTime  time.Time       `yaml:"lastTransitionTime"`
+}
+
+type NodeCountsType struct {
+	Registered       *RegisteredType `yaml:"registered"`
+	LongUnregistered int             `yaml:"longUnregistered"`
+	Unregistered     int             `yaml:"unregistered"`
+}
+
+type RegisteredType struct {
+	Total      int `yaml:"total"`
+	Ready      int `yaml:"ready"`
+	NotStarted int `yaml:"notStarted"`
+}
+
+type ScaleUpType struct {
+	Status             string    `yaml:"status"`
+	LastProbeTime      time.Time `yaml:"lastProbeTime"`
+	LastTransitionTime time.Time `yaml:"lastTransitionTime"`
+}
+
+type ScaleDownType struct {
+	Status             string    `yaml:"status"`
+	LastProbeTime      time.Time `yaml:"lastProbeTime"`
+	LastTransitionTime time.Time `yaml:"lastTransitionTime"`
+}
+
+type NodeGroupsType struct {
+	Name      string         `yaml:"name"`
+	Health    *HealthType    `yaml:"health,omitempty"`
+	ScaleUp   *ScaleUpType   `yaml:"scaleUp,omitempty"`
+	ScaleDown *ScaleDownType `yaml:"scaleDown"`
+}
+
+type ClusterAutoscalerStatusConfigMap struct {
+	Time             string            `yaml:"time"`
+	AutoscalerStatus string            `yaml:"autoscalerStatus"`
+	ClusterWide      ClusterWideType   `yaml:"clusterWide"`
+	NodeGroups       []*NodeGroupsType `yaml:"nodeGroups"`
+}
+
 func HasScaleDownCapacity(status string, node *corev1.Node) (bool, error) {
 	nodePoolName, err := getNodePoolName(node)
 	if err != nil {
 		return false, err
 	}
+
 	ready, min, err := getNodePoolReadyAndMinCount(node.Status.NodeInfo.KubeletVersion, status, nodePoolName)
 	if err != nil {
 		return false, err
@@ -78,10 +134,14 @@ func getNodePoolReadyAndMinCount(kubeletVersion, status, nodePoolName string) (i
 	// v1.3.X or later
 	health, err := getNodePoolHealth(status, nodePoolName)
 	if err != nil {
+		fmt.Printf("Error: %s", err.Error())
 		return 0, 0, err
 	}
-	ready, min := getReadyAndMinCount(health)
-	return ready, min, nil
+
+	if health.NodeCounts != nil && health.NodeCounts.Registered != nil {
+		return health.NodeCounts.Registered.Ready, health.MinSize, nil
+	}
+	return 0, 0, nil
 }
 
 func getNodePoolHealthPreV130(status string, nodePoolName string) (string, error) {
@@ -101,33 +161,22 @@ func getNodePoolHealthPreV130(status string, nodePoolName string) (string, error
 	return matches[1], nil
 }
 
-func getNodePoolHealth(status string, nodePoolName string) (interface{}, error) {
-	data := make(map[string]interface{})
+func getNodePoolHealth(s string, nodePoolName string) (*HealthType, error) {
+	status := ClusterAutoscalerStatusConfigMap{}
 
-	err := yaml.Unmarshal([]byte(status), &data)
+	err := yaml.Unmarshal([]byte(s), &status)
 	if err != nil {
 		log.Fatalf("error: %v", err)
-		return "", fmt.Errorf("could not unmarshal the cluster-autoscaler status")
+		return nil, fmt.Errorf("could not unmarshal the cluster-autoscaler status")
 	}
 
-	ng, ok := data["nodeGroups"].([]interface{})
-	if ok {
-		for _, myMap := range ng {
-			x, ok := myMap.(map[string]interface{})
-			if !ok {
-				break
-			}
-
-			if x["name"] == nodePoolName {
-				health := x["health"]
-				if health != nil {
-					return x["health"], nil
-				}
-			}
+	for _, ng := range status.NodeGroups {
+		if strings.EqualFold(ng.Name, nodePoolName) {
+			return ng.Health, nil
 		}
 	}
 
-	return "", fmt.Errorf("could not find status for node pool: %s", nodePoolName)
+	return nil, fmt.Errorf("could not find status for node pool: %s", nodePoolName)
 }
 
 func getReadyAndMinCountPreV130(health string) (int, int, error) {
@@ -147,33 +196,4 @@ func getReadyAndMinCountPreV130(health string) (int, int, error) {
 		return 0, 0, fmt.Errorf("could not convert min count to int: %w", err)
 	}
 	return ready, min, nil
-}
-
-func getReadyAndMinCount(health interface{}) (int, int) {
-	healthmap, ok := health.(map[string]interface{})
-	if !ok {
-		return 0, 0
-	}
-
-	minSize, ok := healthmap["minSize"].(int)
-	if !ok {
-		return 0, 0
-	}
-
-	nodeCounts, ok := healthmap["nodeCounts"].(map[string]interface{})
-	if !ok {
-		return 0, 0
-	}
-
-	registerednodes, ok := nodeCounts["registered"].(map[string]interface{})
-	if !ok {
-		return 0, 0
-	}
-
-	ready, ok := registerednodes["ready"].(int)
-	if !ok {
-		return 0, 0
-	}
-
-	return ready, minSize
 }

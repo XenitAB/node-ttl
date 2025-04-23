@@ -32,9 +32,9 @@ func TestGetNodePoolReadyAndMinCountExisting(t *testing.T) {
 			min:   35,
 		},
 	}
-	status := mockClusterAutoscalerStatusPreV130(t, nodePools)
+	status := mockClusterAutoscalerStatus(t, nodePools)
 	for _, nodePool := range nodePools {
-		ready, min, err := getNodePoolReadyAndMinCount("v1.25.3", status, nodePool.name)
+		ready, min, err := getNodePoolReadyAndMinCount("v1.31.2", status, nodePool.name)
 		require.NoError(t, err)
 		require.Equal(t, nodePool.ready, ready)
 		require.Equal(t, nodePool.min, min)
@@ -49,8 +49,8 @@ func TestGetNodePoolReadyAndMinCountNotFound(t *testing.T) {
 			min:   22,
 		},
 	}
-	status := mockClusterAutoscalerStatusPreV130(t, nodePools)
-	_, _, err := getNodePoolReadyAndMinCount("v1.25.3", status, "bar")
+	status := mockClusterAutoscalerStatus(t, nodePools)
+	_, _, err := getNodePoolReadyAndMinCount("v1.31.2", status, "bar")
 	require.EqualError(t, err, "could not find status for node pool: bar")
 }
 
@@ -80,13 +80,13 @@ func TestHasScaleDownCapacity(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			for _, cp := range getNodePoolLabelKeys() {
-				node, nodePoolName := getNodePoolNameAndNode(t, cp, "foobar")
+				node, nodePoolName := getNodePoolNameAndNode(t, "v1.31.2", cp, "foobar")
 				nodePool := testNodePool{
 					name:  nodePoolName,
 					ready: tt.ready,
 					min:   tt.min,
 				}
-				status := mockClusterAutoscalerStatusPreV130(t, []testNodePool{nodePool})
+				status := mockClusterAutoscalerStatus(t, []testNodePool{nodePool})
 				ok, err := HasScaleDownCapacity(status, node)
 				require.NoError(t, err)
 				require.Equal(t, tt.isSafe, ok)
@@ -101,44 +101,57 @@ type testNodePool struct {
 	min   int
 }
 
-func mockClusterAutoscalerStatusPreV130(t *testing.T, nodePools []testNodePool) string {
+func mockClusterAutoscalerStatus(t *testing.T, nodePools []testNodePool) string {
 	t.Helper()
 
-	status := `Cluster-autoscaler status at 2022-08-11 12:35:11.797051423 +0000 UTC:
-	Cluster-wide:
-	  Health:      Healthy (ready=10 unready=0 notStarted=0 longNotStarted=0 registered=10 longUnregistered=0)
-	               LastProbeTime:      2022-08-11 12:35:11.782449164 +0000 UTC m=+935528.106132475
-	               LastTransitionTime: 2022-08-08 10:28:18.652598604 +0000 UTC m=+668714.976282015
-	  ScaleUp:     NoActivity (ready=10 registered=10)
-	               LastProbeTime:      2022-08-11 12:35:11.782449164 +0000 UTC m=+935528.106132475
-	               LastTransitionTime: 2022-08-08 11:57:06.468308057 +0000 UTC m=+674042.791991368
-	  ScaleDown:   NoCandidates (candidates=0)
-	               LastProbeTime:      2022-08-11 12:35:11.782449164 +0000 UTC m=+935528.106132475
-	               LastTransitionTime: 2022-08-08 12:03:59.241031335 +0000 UTC m=+674455.564714746
-
-	NodeGroups:`
+	status := `time: 2025-04-22 14:29:08.360891242 +0000 UTC
+autoscalerStatus: Running
+clusterWide:
+  health:
+    status: Healthy
+    nodeCounts:
+      registered:
+        total: 5
+        ready: 5
+        notStarted: 0
+      longUnregistered: 0
+      unregistered: 0
+    lastProbeTime: "2025-04-22T14:29:08.360891242Z"
+    lastTransitionTime: "2025-04-17T23:46:40.655271485Z"
+  scaleUp:
+    status: NoActivity
+    lastProbeTime: "2025-04-22T14:29:08.360891242Z"
+    lastTransitionTime: "2025-04-22T00:37:48.447964164Z"
+  scaleDown:
+    status: NoCandidates
+    lastProbeTime: "2025-04-22T14:29:08.360891242Z"
+    lastTransitionTime: "2025-04-22T00:48:01.870055554Z"
+nodeGroups:`
 
 	//nolint:gocritic // ignore
 	for _, nodePool := range nodePools {
-		//nolint:lll // ignore
 		status = fmt.Sprintf(`%[1]s
-	  Name:        %[2]s
-	  Health:      Healthy (ready=%[3]d unready=0 notStarted=0 longNotStarted=0 registered=%[3]d longUnregistered=0 cloudProviderTarget=%[3]d (minSize=%[4]d, maxSize=0))
-	               LastProbeTime:      2022-08-11 12:35:11.782449164 +0000 UTC m=+935528.106132475
-	               LastTransitionTime: 2022-08-08 10:28:18.652598604 +0000 UTC m=+668714.976282015
-	  ScaleUp:     NoActivity (ready=%[3]d cloudProviderTarget=%[3]d)
-	               LastProbeTime:      2022-08-11 12:35:11.782449164 +0000 UTC m=+935528.106132475
-	               LastTransitionTime: 2022-08-08 11:57:06.468308057 +0000 UTC m=+674042.791991368
-	  ScaleDown:   NoCandidates (candidates=0)
-	               LastProbeTime:      2022-08-11 12:35:11.782449164 +0000 UTC m=+935528.106132475
-	               LastTransitionTime: 2022-08-08 12:03:59.241031335 +0000 UTC m=+674455.564714746
-
-        `, status, nodePool.name, nodePool.ready, nodePool.min)
+- name: %[2]s
+  health:
+    status: Healthy
+    nodeCounts:
+      registered:
+        total: %[3]d
+        ready: %[3]d
+        notStarted: 0
+      longUnregistered: 0
+      unregistered: 0
+    cloudProviderTarget: %[3]d
+    minSize: %[4]d
+    maxSize: 10
+    lastProbeTime: "2025-04-22T14:29:08.360891242Z"
+    lastTransitionTime: "2025-04-17T23:46:40.655271485Z"`, status, nodePool.name, nodePool.ready, nodePool.min)
 	}
+
 	return status
 }
 
-func getNodePoolNameAndNode(t *testing.T, cp string, name string) (*corev1.Node, string) {
+func getNodePoolNameAndNode(t *testing.T, version string, cp string, name string) (*corev1.Node, string) {
 	t.Helper()
 
 	switch cp {
@@ -154,7 +167,7 @@ func getNodePoolNameAndNode(t *testing.T, cp string, name string) (*corev1.Node,
 			},
 			Status: corev1.NodeStatus{
 				NodeInfo: corev1.NodeSystemInfo{
-					KubeletVersion: "v1.25.3",
+					KubeletVersion: version,
 				},
 			},
 		}, nodePoolName
@@ -169,10 +182,10 @@ func getNodePoolNameAndNode(t *testing.T, cp string, name string) (*corev1.Node,
 			},
 			Status: corev1.NodeStatus{
 				NodeInfo: corev1.NodeSystemInfo{
-					KubeletVersion: "v1.25.3",
+					KubeletVersion: version,
 				},
 			},
-		}, fmt.Sprintf("eks-%s-c8c2d2a8-2d51-8764-1776-0b3f58267273", eksNodePoolName)
+		}, fmt.Sprintf("eks-%s-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", eksNodePoolName)
 	case KubemarkNodePoolLabelKey:
 		return &corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{
@@ -183,7 +196,7 @@ func getNodePoolNameAndNode(t *testing.T, cp string, name string) (*corev1.Node,
 			},
 			Status: corev1.NodeStatus{
 				NodeInfo: corev1.NodeSystemInfo{
-					KubeletVersion: "v1.25.3",
+					KubeletVersion: version,
 				},
 			},
 		}, name
