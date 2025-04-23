@@ -130,7 +130,6 @@ nodeGroups:`
 
 	//nolint:gocritic // ignore
 	for _, nodePool := range nodePools {
-		//nolint:lll // ignore
 		status = fmt.Sprintf(`%[1]s
 - name: %[2]s
   health:
