@@ -10,12 +10,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Clone repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: "kubernetes/autoscaler"
-          ref: "cluster-autoscaler-1.26.0"
+          ref: "cluster-autoscaler-1.31.2"
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
@@ -25,12 +25,12 @@ jobs:
           cd cluster-autoscaler
           BUILD_TAGS=kubemark make build
       - name: Build and push image
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v6
         with:
           push: true
           context: cluster-autoscaler
           file: ./cluster-autoscaler/Dockerfile.amd64
           platforms: linux/amd64
-          tags: ghcr.io/xenitab/cluster-autoscaler-kubemark:1.26.0
+          tags: ghcr.io/xenitab/cluster-autoscaler-kubemark:1.31.2
           labels: |
             org.opencontainers.image.url=${{ github.event.repository.html_url }}
