@@ -25,8 +25,8 @@ e2e: docker-build
 	# Create kind cluster and load images
 	kind create cluster --kubeconfig $$KIND_KUBECONFIG
 	kind load docker-image ${IMG}
-	docker pull quay.io/elmiko/kubemark:v1.25.3
-	kind load docker-image quay.io/elmiko/kubemark:v1.25.3
+	docker pull quay.io/cluster-api-provider-kubemark/kubemark:v1.31.0
+	kind load docker-image quay.io/cluster-api-provider-kubemark/kubemark:v1.31.0
 
 	# Start hollow node
 	kubectl --kubeconfig $$KIND_KUBECONFIG apply -f ./e2e/hollow-node.yaml
@@ -54,4 +54,4 @@ e2e: docker-build
 	go test ./e2e/e2e_test.go -cover -v -timeout 300s -run TestTTLEviction
 
 	# Delete cluster
-	kind delete cluster
+	#kind delete cluster

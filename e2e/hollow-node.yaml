@@ -38,7 +38,7 @@ spec:
           path: /run/containerd
       containers:
       - name: hollow-kubelet
-        image: quay.io/elmiko/kubemark:v1.25.3
+        image: quay.io/cluster-api-provider-kubemark/kubemark:v1.31.0
         ports:
         - containerPort: 4194
         - containerPort: 10250
@@ -54,7 +54,6 @@ spec:
         - --morph=kubelet
         - --name=$(NODE_NAME)
         - --kubeconfig=/kubeconfig/kubelet.kubeconfig
-        - --alsologtostderr
         - --v=2
         - --node-labels=xkf.xenit.io/node-ttl=30s,autoscaling.k8s.io/nodegroup=asg1
         - --register-with-taints=kubemark:NoSchedule
@@ -73,7 +72,7 @@ spec:
         securityContext:
           privileged: true
       - name: hollow-proxy
-        image: quay.io/elmiko/kubemark:v1.25.3
+        image: quay.io/cluster-api-provider-kubemark/kubemark:v1.31.0
         env:
         - name: NODE_NAME
           valueFrom:
@@ -86,7 +85,6 @@ spec:
         - --name=$(NODE_NAME)
         - --use-real-proxier=false
         - --kubeconfig=/kubeconfig/kubeproxy.kubeconfig
-        - --alsologtostderr
         - --v=2
         volumeMounts:
         - name: kubeconfig-volume
