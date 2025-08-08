@@ -57,4 +57,4 @@ e2e: docker-build
 	go test ./e2e/e2e_test.go -cover -v -timeout 600s -run TestTTLEviction
 
 	# Delete cluster
-	kind delete cluster
+	#kind delete cluster
