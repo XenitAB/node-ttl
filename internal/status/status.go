@@ -72,17 +72,20 @@ type ClusterAutoscalerStatusConfigMap struct {
 	NodeGroups       []*NodeGroupsType `yaml:"nodeGroups"`
 }
 
-func HasScaleDownCapacity(status string, node *corev1.Node) (bool, error) {
+func CanEvictNode(status string, node *corev1.Node) (bool, error) {
 	nodePoolName, err := getNodePoolName(node)
 	if err != nil {
 		return false, err
 	}
 
-	ready, min, err := getNodePoolReadyAndMinCount(node.Status.NodeInfo.KubeletVersion, status, nodePoolName)
+	ready, min, max, err := getNodePoolCounts(node.Status.NodeInfo.KubeletVersion, status, nodePoolName)
 	if err != nil {
 		return false, err
 	}
-	if ready <= min {
+	// We evict the node if we can temporarily scale down or add a new node
+	//nolint:staticcheck // QF1001: this is exactly what the above comment states
+	if !(ready-1 >= min || ready+1 <= max) {
+		log.Printf("not safe to evict node (ready: %d, min: %d, max: %d)", ready, min, max)
 		return false, nil
 	}
 	return true, nil
@@ -119,29 +122,29 @@ func getNodePoolName(node *corev1.Node) (string, error) {
 	return "", fmt.Errorf("could not find node pool label in node: %s", node.Name)
 }
 
-func getNodePoolReadyAndMinCount(kubeletVersion, status, nodePoolName string) (int, int, error) {
+func getNodePoolCounts(kubeletVersion, status, nodePoolName string) (int, int, int, error) {
 	// Assume we are running at least v1.2.X
 	preV130 := strings.Contains(kubeletVersion, "v1.2")
 	if preV130 {
 		health, err := getNodePoolHealthPreV130(status, nodePoolName)
 		if err != nil {
-			return 0, 0, err
+			return 0, 0, 0, err
 		}
-		ready, min, err := getReadyAndMinCountPreV130(health)
-		return ready, min, err
+		ready, min, max, err := getNodePoolCountsPreV130(health)
+		return ready, min, max, err
 	}
 
 	// v1.3.X or later
 	health, err := getNodePoolHealth(status, nodePoolName)
 	if err != nil {
 		fmt.Printf("Error: %s", err.Error())
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 
 	if health.NodeCounts != nil && health.NodeCounts.Registered != nil {
-		return health.NodeCounts.Registered.Ready, health.MinSize, nil
+		return health.NodeCounts.Registered.Ready, health.MinSize, health.MaxSize, nil
 	}
-	return 0, 0, nil
+	return 0, 0, 0, nil
 }
 
 func getNodePoolHealthPreV130(status string, nodePoolName string) (string, error) {
@@ -179,21 +182,26 @@ func getNodePoolHealth(s string, nodePoolName string) (*HealthType, error) {
 	return nil, fmt.Errorf("could not find status for node pool: %s", nodePoolName)
 }
 
-func getReadyAndMinCountPreV130(health string) (int, int, error) {
-	reg := regexp.MustCompile(`Healthy \(ready=(\d+).*minSize=(\d+)`)
+func getNodePoolCountsPreV130(health string) (int, int, int, error) {
+	reg := regexp.MustCompile(`Healthy \(ready=(\d+).*minSize=(\d+).*maxSize=(\d+)`)
 	matches := reg.FindStringSubmatch(health)
 	if len(matches) != 3 {
-		return 0, 0, fmt.Errorf("expected match list to be of length 3: %d", len(matches))
+		return 0, 0, 0, fmt.Errorf("expected match list to be of length 3: %d", len(matches))
 	}
 
 	ready, err := strconv.Atoi(matches[1])
 	if err != nil {
-		return 0, 0, fmt.Errorf("could not convert ready count to int: %w", err)
+		return 0, 0, 0, fmt.Errorf("could not convert ready count to int: %w", err)
 	}
 
 	min, err := strconv.Atoi(matches[2])
 	if err != nil {
-		return 0, 0, fmt.Errorf("could not convert min count to int: %w", err)
+		return 0, 0, 0, fmt.Errorf("could not convert min count to int: %w", err)
 	}
-	return ready, min, nil
+
+	max, err := strconv.Atoi(matches[3])
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("could not convert min count to int: %w", err)
+	}
+	return ready, min, max, nil
 }
