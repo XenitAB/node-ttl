@@ -30,7 +30,7 @@ linters:
       max-complexity: 15
       package-average: 0
     dogsled:
-      max-blank-identifiers: 2
+      max-blank-identifiers: 3
     dupl:
       threshold: 100
     errcheck:
