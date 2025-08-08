@@ -83,7 +83,7 @@ func CanEvictNode(status string, node *corev1.Node) (bool, error) {
 		return false, err
 	}
 	// We evict the node if we can temporarily scale down or add a new node
-	//nolint:staticcheck // this is exactly what the above comment states
+	//nolint:staticcheck // QF1001: this is exactly what the above comment states
 	if !(ready-1 >= min || ready+1 <= max) {
 		log.Printf("not safe to evict node (ready: %d, min: %d, max: %d)", ready, min, max)
 		return false, nil
