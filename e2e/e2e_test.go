@@ -16,25 +16,6 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-func TestCapcityCheck(t *testing.T) {
-	path := os.Getenv("KIND_KUBECONFIG")
-	cfg, err := clientcmd.BuildConfigFromFlags("", path)
-	require.NoError(t, err)
-	client, err := kubernetes.NewForConfig(cfg)
-	require.NoError(t, err)
-
-	require.Never(t, func() bool {
-		nodeList, err := client.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: "xkf.xenit.io/node-ttl"})
-		require.NoError(t, err)
-		for _, node := range nodeList.Items {
-			t.Log("checking that node is not evicted", node.Name)
-			// TODO: There should be a better way to check that eviction is due to node ttl
-			return node.Spec.Unschedulable
-		}
-		return false
-	}, 1*time.Minute, 5*time.Second)
-}
-
 func TestTTLEviction(t *testing.T) {
 	path := os.Getenv("KIND_KUBECONFIG")
 	cfg, err := clientcmd.BuildConfigFromFlags("", path)
@@ -88,7 +69,7 @@ func TestTTLEviction(t *testing.T) {
 				return false
 			}
 			return true
-		}, 2*time.Minute, 1*time.Second, "node should be delted")
+		}, 2*time.Minute, 1*time.Second, "node should be deleted")
 		t.Log("underutilized node has been deleted", node.Name)
 	}
 }

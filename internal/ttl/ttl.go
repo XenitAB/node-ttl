@@ -124,12 +124,12 @@ func ttlEvictionCandidate(ctx context.Context, client kubernetes.Interface,
 			if !ok {
 				return nil, false, fmt.Errorf("could not find status in config map")
 			}
-			ok, err = status.HasScaleDownCapacity(caStatus, &node)
+			ok, err = status.CanEvictNode(caStatus, &node)
 			if err != nil {
 				return nil, false, err
 			}
 			if !ok {
-				log.Info("skipping because node pool does not have capacity for scale down")
+				log.Info("skipping because node pool does not have capacity to evict the node")
 				continue
 			}
 		}

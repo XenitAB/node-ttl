@@ -315,7 +315,7 @@ spec:
             - ./cluster-autoscaler
             - --cloud-provider=kubemark
             - --namespace=cluster-autoscaler
-            - --nodes=1:10:asg1
+            - --nodes=2:3:asg1
             - --logtostderr=true
             - --scale-down-delay-after-add=10s
             - --scale-down-delay-after-delete=10s

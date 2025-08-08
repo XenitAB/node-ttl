@@ -9,35 +9,40 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func TestGetNodePoolReadyAndMinCountExisting(t *testing.T) {
+func TestGetNodePoolReadyAndMinMaxCountExisting(t *testing.T) {
 	nodePools := []testNodePool{
 		{
 			name:  "foo",
 			ready: 10,
 			min:   22,
+			max:   30,
 		},
 		{
 			name:  "bar",
 			ready: 25,
 			min:   1,
+			max:   30,
 		},
 		{
 			name:  "nodePool",
 			ready: 2,
 			min:   100,
+			max:   500,
 		},
 		{
 			name:  "baz",
 			ready: 87,
 			min:   35,
+			max:   100,
 		},
 	}
 	status := mockClusterAutoscalerStatus(t, nodePools)
 	for _, nodePool := range nodePools {
-		ready, min, err := getNodePoolReadyAndMinCount("v1.31.2", status, nodePool.name)
+		ready, min, max, err := getNodePoolCounts("v1.31.2", status, nodePool.name)
 		require.NoError(t, err)
 		require.Equal(t, nodePool.ready, ready)
 		require.Equal(t, nodePool.min, min)
+		require.Equal(t, nodePool.max, max)
 	}
 }
 
@@ -50,29 +55,32 @@ func TestGetNodePoolReadyAndMinCountNotFound(t *testing.T) {
 		},
 	}
 	status := mockClusterAutoscalerStatus(t, nodePools)
-	_, _, err := getNodePoolReadyAndMinCount("v1.31.2", status, "bar")
+	_, _, _, err := getNodePoolCounts("v1.31.2", status, "bar")
 	require.EqualError(t, err, "could not find status for node pool: bar")
 }
 
-func TestHasScaleDownCapacity(t *testing.T) {
+func TestCanEvictNode(t *testing.T) {
 	type test struct {
 		name   string
 		ready  int
 		min    int
+		max    int
 		isSafe bool
 	}
 
 	tests := []test{
 		{
-			name:   "safe to scale down node pool foo",
+			name:   "safe to evict node in pool foo",
 			ready:  2,
 			min:    1,
+			max:    3,
 			isSafe: true,
 		},
 		{
-			name:   "not safe to scale down node pool bar",
+			name:   "not safe to evict node in pool bar",
 			ready:  1,
 			min:    1,
+			max:    1,
 			isSafe: false,
 		},
 	}
@@ -85,9 +93,10 @@ func TestHasScaleDownCapacity(t *testing.T) {
 					name:  nodePoolName,
 					ready: tt.ready,
 					min:   tt.min,
+					max:   tt.max,
 				}
 				status := mockClusterAutoscalerStatus(t, []testNodePool{nodePool})
-				ok, err := HasScaleDownCapacity(status, node)
+				ok, err := CanEvictNode(status, node)
 				require.NoError(t, err)
 				require.Equal(t, tt.isSafe, ok)
 			}
@@ -99,6 +108,7 @@ type testNodePool struct {
 	name  string
 	ready int
 	min   int
+	max   int
 }
 
 func mockClusterAutoscalerStatus(t *testing.T, nodePools []testNodePool) string {
@@ -143,9 +153,9 @@ nodeGroups:`
       unregistered: 0
     cloudProviderTarget: %[3]d
     minSize: %[4]d
-    maxSize: 10
+    maxSize: %[5]d
     lastProbeTime: "2025-04-22T14:29:08.360891242Z"
-    lastTransitionTime: "2025-04-17T23:46:40.655271485Z"`, status, nodePool.name, nodePool.ready, nodePool.min)
+    lastTransitionTime: "2025-04-17T23:46:40.655271485Z"`, status, nodePool.name, nodePool.ready, nodePool.min, nodePool.max)
 	}
 
 	return status

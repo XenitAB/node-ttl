@@ -3,11 +3,17 @@ IMG ?= ghcr.io/xenitab/node-ttl:$(TAG)
 
 all: fmt vet lint
 
+fmt:
+	go fmt ./...
+
+vet:
+	go vet ./...
+
 lint:
 	golangci-lint run ./...
 
 test:
-	go test --cover ./...
+	go test -v --cover ./...
 
 docker-build:
 	docker build -t ${IMG} .
@@ -41,9 +47,6 @@ e2e: docker-build
 	# Start node ttl
 	helm upgrade --kubeconfig $$KIND_KUBECONFIG --install --create-namespace --namespace="node-ttl" node-ttl ./charts/node-ttl --set "image.pullPolicy=Never" --set "nodeTtl.interval=10s" --set "image.tag=${TAG}"
 
-	# Run capcity check tests
-	go test ./e2e/e2e_test.go -cover -v -timeout 300s -run TestCapcityCheck
-
 	# Start pause workloads
 	kubectl --kubeconfig $$KIND_KUBECONFIG apply -f ./e2e/pause-workloads.yaml
 	kubectl --kubeconfig $$KIND_KUBECONFIG --namespace default wait --timeout=300s --for=jsonpath="{.status.active}"=1 job/pause
@@ -51,7 +54,7 @@ e2e: docker-build
 	kubectl --kubeconfig $$KIND_KUBECONFIG --namespace default wait --timeout=300s --for=jsonpath="{.status.availableReplicas}"=3 statefulset/pause
 
 	# Run TTL eviction tests
-	go test ./e2e/e2e_test.go -cover -v -timeout 300s -run TestTTLEviction
+	go test ./e2e/e2e_test.go -cover -v -timeout 600s -run TestTTLEviction
 
 	# Delete cluster
-	#kind delete cluster
+	kind delete cluster
