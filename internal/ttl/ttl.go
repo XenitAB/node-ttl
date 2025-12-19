@@ -175,28 +175,56 @@ func evictNode(ctx context.Context, client kubernetes.Interface, node *corev1.No
 		ErrOut:              io.Discard,
 		Out:                 io.Discard,
 		OnPodDeletedOrEvicted: func(pod *corev1.Pod, usingEviction bool) {
-			log.Info("completed eviction", "pod", pod.Name)
+			log.Info("completed eviction", "pod", pod.Name, "usingEviction", usingEviction)
 		},
 	}
 
-	// Retry to avoid large delays when API server hickups occur.
 	err := retry.Do(func() error {
+		log.Info("cordoning node", "node", node.Name)
 		err := drain.RunCordonOrUncordon(helper, node, true)
 		if err != nil {
+			log.Error(err, "failed to cordon node", "node", node.Name)
 			return fmt.Errorf("could not cordon node %s: %w", node.Name, err)
 		}
+		log.Info("draining node", "node", node.Name)
 		err = drain.RunNodeDrain(helper, node.Name)
 		if err != nil {
+			log.Error(err, "failed to drain node", "node", node.Name)
 			return fmt.Errorf("could not drain node %s: %w", node.Name, err)
 		}
-		// Wait for node to be deleted
+		log.Info("drain completed", "node", node.Name)
+		// After drain, log remaining pods (excluding DaemonSets and mirror pods)
+		opts := metav1.ListOptions{FieldSelector: "spec.nodeName=" + node.Name}
+		podList, perr := client.CoreV1().Pods("").List(ctx, opts)
+		if perr != nil {
+			log.Error(perr, "failed to list pods after drain", "node", node.Name)
+		} else {
+			remaining := 0
+			for i := range podList.Items {
+				pod := &podList.Items[i]
+				if pod.DeletionTimestamp != nil {
+					continue // pod is terminating
+				}
+				if _, isMirror := pod.Annotations["kubernetes.io/config.mirror"]; isMirror {
+					continue // mirror pod
+				}
+				if controllerRef := metav1.GetControllerOf(pod); controllerRef != nil && controllerRef.Kind == "DaemonSet" {
+					continue // DaemonSet pod
+				}
+				log.Info("pod still present after drain", "pod", pod.Name, "namespace", pod.Namespace)
+				remaining++
+			}
+			log.Info("remaining pods after drain", "count", remaining, "node", node.Name)
+		}
 		return nil
 	}, retry.OnRetry(func(n uint, err error) {
 		log.Error(err, "retrying drain due to error", "attempt", n)
 	}), retry.Attempts(5), retry.Delay(1*time.Second))
 	if err != nil {
+		log.Error(err, "eviction failed", "node", node.Name)
 		return err
 	}
+	log.Info("eviction succeeded", "node", node.Name)
 	return nil
 }
 
