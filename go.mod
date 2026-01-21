@@ -3,7 +3,7 @@ module github.com/xenitab/node-ttl
 go 1.23.0
 
 require (
-	github.com/alexflint/go-arg v1.5.1
+	github.com/alexflint/go-arg v1.6.0
 	github.com/avast/retry-go v3.0.0+incompatible
 	github.com/go-logr/logr v1.4.2
 	github.com/go-logr/zapr v1.3.0
