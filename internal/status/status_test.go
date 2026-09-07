@@ -183,6 +183,9 @@ func getNodePoolNameAndNode(t *testing.T, version string, cp string, name string
 		}, nodePoolName
 	case AWSNodePoolLabelKey:
 		eksNodePoolName := fmt.Sprintf("dev-eks2-%s", name)
+		// Cluster Autoscaler reports the generated ASG name, which is the EKS node pool name
+		// with a UUID suffix. The status lookup has to cope with that suffix being unknown.
+		asgName := fmt.Sprintf("eks-%s-6ccf1015-c926-b646-4fb7-8009c12edd63", eksNodePoolName)
 		return &corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "ip-10-100-27-63.eu-west-1.compute.internal",
@@ -195,7 +198,7 @@ func getNodePoolNameAndNode(t *testing.T, version string, cp string, name string
 					KubeletVersion: version,
 				},
 			},
-		}, fmt.Sprintf("eks-%s-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", eksNodePoolName)
+		}, asgName
 	case KubemarkNodePoolLabelKey:
 		return &corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{

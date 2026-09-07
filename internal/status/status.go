@@ -173,8 +173,17 @@ func getNodePoolHealth(s string, nodePoolName string) (*HealthType, error) {
 		return nil, fmt.Errorf("could not unmarshal the cluster-autoscaler status")
 	}
 
+	// getNodePoolName returns a pattern rather than a literal name for AWS, because the ASG
+	// name that Cluster Autoscaler reports carries a generated UUID suffix which cannot be
+	// read from the Node. Match rather than compare so that suffix is tolerated. Literal
+	// names from the other cloud providers match themselves.
+	reg, err := regexp.Compile(fmt.Sprintf("(?i)^%s$", nodePoolName))
+	if err != nil {
+		return nil, fmt.Errorf("could not compile node pool name %q: %w", nodePoolName, err)
+	}
+
 	for _, ng := range status.NodeGroups {
-		if strings.EqualFold(ng.Name, nodePoolName) {
+		if reg.MatchString(ng.Name) {
 			return ng.Health, nil
 		}
 	}
